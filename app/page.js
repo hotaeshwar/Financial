@@ -11,7 +11,14 @@ import {
   CheckCircle, 
   AlertTriangle,
   Clock as ClockIcon,
-  X 
+  X,
+  Sun,
+  Cloud,
+  CloudSun,
+  CloudRain,
+  CloudDrizzle,
+  CloudLightning,
+  Snowflake
 } from "lucide-react";
 import CollectionList from "@/components/CollectionList";
 import FixedExpenses from "@/components/FixedExpenses";
@@ -36,6 +43,14 @@ export default function Home() {
   const [reminders, setReminders] = useState([]);
   const [activeAlarm, setActiveAlarm] = useState(null);
   const alarmIntervalRef = useRef(null);
+
+  // Weather & Greeting states
+  const [greeting, setGreeting] = useState("Hello");
+  const [weather, setWeather] = useState({
+    city: "",
+    temp: null,
+    code: null
+  });
 
   // Sync clock every second
   useEffect(() => {
@@ -77,6 +92,93 @@ export default function Home() {
         setReminders(JSON.parse(storedRem));
       }
     }
+  }, []);
+
+  const getWeatherIcon = (code) => {
+    if (code === null || code === undefined) return <Sun size={12} className="text-amber-500" />;
+    if (code === 0) return <Sun size={12} className="text-amber-500 animate-spin-slow" />;
+    if (code === 1 || code === 2) return <CloudSun size={12} className="text-slate-400" />;
+    if (code === 3 || code === 45 || code === 48) return <Cloud size={12} className="text-slate-400" />;
+    if (code >= 51 && code <= 57) return <CloudDrizzle size={12} className="text-blue-400" />;
+    if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return <CloudRain size={12} className="text-blue-500" />;
+    if (code >= 71 && code <= 77) return <Snowflake size={12} className="text-sky-300" />;
+    if (code >= 95) return <CloudLightning size={12} className="text-yellow-500 animate-bounce" />;
+    return <Sun size={12} className="text-amber-500" />;
+  };
+
+  // Set time-based greeting and fetch weather/location
+  useEffect(() => {
+    const hr = new Date().getHours();
+    if (hr >= 5 && hr < 12) setGreeting("Good morning");
+    else if (hr >= 12 && hr < 17) setGreeting("Good afternoon");
+    else if (hr >= 17 && hr < 21) setGreeting("Good evening");
+    else setGreeting("Hey there");
+
+    const fetchWeather = async (lat, lon, cityName) => {
+      try {
+        const weatherRes = await fetch(
+          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`
+        );
+        const weatherData = await weatherRes.json();
+        if (weatherData && weatherData.current_weather) {
+          setWeather({
+            city: cityName,
+            temp: Math.round(weatherData.current_weather.temperature),
+            code: weatherData.current_weather.weathercode
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching weather data:", err);
+      }
+    };
+
+    const getGeoAndWeather = async () => {
+      if (typeof window !== "undefined" && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            const { latitude, longitude } = position.coords;
+            let city = "your location";
+            try {
+              const geoRes = await fetch(
+                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
+              );
+              const geoData = await geoRes.json();
+              if (geoData && geoData.address) {
+                city = geoData.address.city || geoData.address.town || geoData.address.village || "your area";
+              }
+            } catch (e) {
+              console.warn("Reverse geocode failed, using coordinates");
+            }
+            fetchWeather(latitude, longitude, city);
+          },
+          async (error) => {
+            console.warn("Geolocation failed/blocked, falling back to IP lookup:", error.message);
+            try {
+              const ipRes = await fetch("https://ipapi.co/json/");
+              const ipData = await ipRes.json();
+              if (ipData && ipData.latitude && ipData.longitude) {
+                fetchWeather(ipData.latitude, ipData.longitude, ipData.city || "your area");
+              }
+            } catch (ipErr) {
+              console.error("IP geolocation failed:", ipErr);
+            }
+          },
+          { timeout: 8000 }
+        );
+      } else {
+        try {
+          const ipRes = await fetch("https://ipapi.co/json/");
+          const ipData = await ipRes.json();
+          if (ipData && ipData.latitude && ipData.longitude) {
+            fetchWeather(ipData.latitude, ipData.longitude, ipData.city || "your area");
+          }
+        } catch (ipErr) {
+          console.error("IP geolocation failed:", ipErr);
+        }
+      }
+    };
+
+    getGeoAndWeather();
   }, []);
 
   // Audio tone alerts synthesizer
@@ -330,12 +432,27 @@ export default function Home() {
             className="w-20 h-20 object-contain shadow-sm rounded-lg bg-white p-1" 
           />
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900">
-              BiD Finance Monitor Dashboard
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
+              <span>{greeting}, Jhank!</span>
             </h1>
-            <p className="text-xs text-slate-400 mt-1">
-              Realtime collections ledger and operational expenditures tracking
-            </p>
+            <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-400 mt-1">
+              <span>BiD Finance Monitor Dashboard</span>
+              {weather.city && (
+                <>
+                  <span className="text-slate-350">•</span>
+                  <span className="text-slate-500 font-medium">in {weather.city}</span>
+                </>
+              )}
+              {weather.temp !== null && (
+                <>
+                  <span className="text-slate-350">•</span>
+                  <span className="flex items-center gap-1 text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200/50 font-semibold text-[10px]">
+                    {getWeatherIcon(weather.code)}
+                    <span>{weather.temp}°C</span>
+                  </span>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
