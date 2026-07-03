@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Plus, Edit3, Trash2, Search, X, Check, IndianRupee, Calendar, Tag, FileText } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import ReceiptModal from "./ReceiptModal";
 
 const exportToExcel = (items, filename) => {
   if (!items || items.length === 0) {
@@ -159,6 +160,7 @@ export default function FixedExpenses({
   const [search, setSearch] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
+  const [activeReceiptItem, setActiveReceiptItem] = useState(null);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -241,19 +243,7 @@ export default function FixedExpenses({
   };
 
   const handleShareWhatsApp = (item) => {
-    const formattedAmount = Number(item.amount).toLocaleString("en-IN", { 
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2 
-    });
-    
-    const message = `*Fixed Expense Details*\n\n` +
-      `• *Description*: ${item.description}\n` +
-      `• *Amount*: ₹${formattedAmount}\n` +
-      `• *Date*: ${item.date}\n` +
-      `• *Status*: ${item.status}`;
-      
-    const encoded = encodeURIComponent(message);
-    window.open(`https://api.whatsapp.com/send?text=${encoded}`, "_blank");
+    setActiveReceiptItem(item);
   };
 
   const handleDeleteClick = (item) => {
@@ -513,6 +503,18 @@ export default function FixedExpenses({
               </form>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* Receipt Share Modal */}
+      <AnimatePresence>
+        {activeReceiptItem && (
+          <ReceiptModal
+            isOpen={true}
+            onClose={() => setActiveReceiptItem(null)}
+            item={activeReceiptItem}
+            type="expense"
+          />
         )}
       </AnimatePresence>
     </div>
