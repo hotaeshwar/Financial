@@ -19,7 +19,7 @@ export default function FixedExpenses({
     description: "",
     amount: "",
     date: "",
-    status: ""
+    status: "Unpaid"
   });
   const [error, setError] = useState("");
 
@@ -31,7 +31,7 @@ export default function FixedExpenses({
       description: "",
       amount: "",
       date: new Date().toISOString().split("T")[0],
-      status: ""
+      status: "Unpaid"
     });
     setIsFormOpen(true);
   };
@@ -75,7 +75,7 @@ export default function FixedExpenses({
       return;
     }
     if (!formData.status.trim()) {
-      setError("Status is required (manually type status).");
+      setError("Status is required.");
       return;
     }
 
@@ -165,7 +165,15 @@ export default function FixedExpenses({
                   </td>
                   <td className="py-3 text-slate-400 text-center whitespace-nowrap">{item.date}</td>
                   <td className="py-3 text-center">
-                    <span className="inline-block bg-slate-100 border border-slate-200/50 text-slate-700 px-2 py-0.5 rounded text-[10px] font-medium tracking-wide">
+                    <span className={`inline-block border px-2 py-0.5 rounded text-[10px] font-medium tracking-wide ${
+                      item.status?.toLowerCase() === "paid"
+                        ? "bg-emerald-50 border-emerald-200/50 text-emerald-700"
+                        : item.status?.toLowerCase() === "unpaid"
+                        ? "bg-rose-50 border-rose-200/50 text-rose-700"
+                        : item.status?.toLowerCase() === "pending"
+                        ? "bg-amber-50 border-amber-200/50 text-amber-700"
+                        : "bg-slate-50 border-slate-200/50 text-slate-700"
+                    }`}>
                       {item.status}
                     </span>
                   </td>
@@ -277,23 +285,25 @@ export default function FixedExpenses({
                   </div>
                 </div>
 
-                {/* Status - Manual text input */}
+                {/* Status - Dropdown select */}
                 <div>
                   <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">
-                    Status <span className="text-[9px] text-slate-400 lowercase font-normal">(type manually)</span>
+                    Status
                   </label>
                   <div className="relative">
                     <span className="absolute inset-y-0 left-0 flex items-center pl-2.5 pointer-events-none text-slate-400">
                       <Tag size={12} />
                     </span>
-                    <input
-                      type="text"
+                    <select
                       name="status"
                       value={formData.status}
                       onChange={handleChange}
-                      placeholder="e.g. Paid, Unpaid, Pending"
-                      className="w-full pl-7 pr-3 border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-slate-500 text-slate-700"
-                    />
+                      className="w-full pl-7 pr-3 border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-slate-500 text-slate-700 bg-white"
+                    >
+                      <option value="Unpaid">Unpaid</option>
+                      <option value="Paid">Paid</option>
+                      <option value="Pending">Pending</option>
+                    </select>
                   </div>
                 </div>
 
