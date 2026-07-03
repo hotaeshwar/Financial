@@ -1,8 +1,154 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Edit3, Trash2, Search, X, Check, IndianRupee, Calendar, Tag } from "lucide-react";
+import { Plus, Edit3, Trash2, Search, X, Check, IndianRupee, Calendar, Tag, FileText } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+
+const exportToExcel = (items, filename) => {
+  if (!items || items.length === 0) {
+    alert("No records to export.");
+    return;
+  }
+
+  // Group items by month
+  const groups = {};
+  items.forEach(item => {
+    const d = new Date(item.date);
+    const monthName = isNaN(d.getTime()) 
+      ? "Unknown Month" 
+      : d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+    if (!groups[monthName]) groups[monthName] = [];
+    groups[monthName].push(item);
+  });
+
+  let xml = `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ <Styles>
+  <Style ss:ID="Default" ss:Name="Normal">
+   <Alignment ss:Vertical="Bottom"/>
+   <Borders/>
+   <Font ss:FontName="Calibri" x:Family="Swiss" ss:Size="11" ss:Color="#000000"/>
+   <Interior/>
+   <NumberFormat/>
+   <Protection/>
+  </Style>
+  <Style ss:ID="HeaderStyle">
+   <Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#FFFFFF"/>
+   <Interior ss:Color="#0F172A" ss:Pattern="Solid"/>
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+  </Style>
+  <Style ss:ID="PaidStyle">
+   <Interior ss:Color="#DCFCE7" ss:Pattern="Solid"/>
+   <Font ss:FontName="Calibri" ss:Size="11" ss:Color="#15803D"/>
+   <Alignment ss:Horizontal="Center"/>
+  </Style>
+  <Style ss:ID="UnpaidStyle">
+   <Interior ss:Color="#FEE2E2" ss:Pattern="Solid"/>
+   <Font ss:FontName="Calibri" ss:Size="11" ss:Color="#B91C1C"/>
+   <Alignment ss:Horizontal="Center"/>
+  </Style>
+  <Style ss:ID="PendingStyle">
+   <Interior ss:Color="#FEF3C7" ss:Pattern="Solid"/>
+   <Font ss:FontName="Calibri" ss:Size="11" ss:Color="#B45309"/>
+   <Alignment ss:Horizontal="Center"/>
+  </Style>
+  <Style ss:ID="ProcessingStyle">
+   <Interior ss:Color="#DBEAFE" ss:Pattern="Solid"/>
+   <Font ss:FontName="Calibri" ss:Size="11" ss:Color="#1D4ED8"/>
+   <Alignment ss:Horizontal="Center"/>
+  </Style>
+  <Style ss:ID="CurrencyStyle">
+   <NumberFormat ss:Format="&quot;₹&quot;#,##0.00"/>
+  </Style>
+  <Style ss:ID="TotalStyle">
+   <Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1"/>
+   <Interior ss:Color="#F1F5F9" ss:Pattern="Solid"/>
+   <Borders>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
+    <Border ss:Position="Bottom" ss:LineStyle="Double" ss:Weight="3" ss:Color="#CBD5E1"/>
+   </Borders>
+  </Style>
+  <Style ss:ID="TotalCurrencyStyle">
+   <Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1"/>
+   <Interior ss:Color="#F1F5F9" ss:Pattern="Solid"/>
+   <NumberFormat ss:Format="&quot;₹&quot;#,##0.00"/>
+   <Borders>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
+    <Border ss:Position="Bottom" ss:LineStyle="Double" ss:Weight="3" ss:Color="#CBD5E1"/>
+   </Borders>
+  </Style>
+ </Styles>`;
+
+  Object.keys(groups).forEach(month => {
+    const monthItems = groups[month];
+    xml += `
+ <Worksheet ss:Name="${month.replace(/[\\/\\?\\*\\]\\[]/g, "")}">
+  <Table ss:ExpandedColumnCount="4" ss:ExpandedRowCount="${monthItems.length + 2}" x:FullColumns="1"
+   x:FullRows="1" ss:DefaultRowHeight="20">
+   <Column ss:AutoFitWidth="0" ss:Width="200"/>
+   <Column ss:AutoFitWidth="0" ss:Width="120"/>
+   <Column ss:AutoFitWidth="0" ss:Width="100"/>
+   <Column ss:AutoFitWidth="0" ss:Width="100"/>
+   <Row ss:AutoFitHeight="0" ss:Height="25">
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Description</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Amount</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Date</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Status</Data></Cell>
+   </Row>`;
+
+    let totalAmount = 0;
+    monthItems.forEach(item => {
+      totalAmount += Number(item.amount || 0);
+      const statusLower = (item.status || "").toLowerCase();
+      let statusStyle = "Default";
+      if (statusLower === "paid" || statusLower === "received") {
+        statusStyle = "PaidStyle";
+      } else if (statusLower === "unpaid") {
+        statusStyle = "UnpaidStyle";
+      } else if (statusLower === "pending") {
+        statusStyle = "PendingStyle";
+      } else if (statusLower === "processing") {
+        statusStyle = "ProcessingStyle";
+      }
+
+      xml += `
+   <Row>
+    <Cell><Data ss:Type="String">${item.description}</Data></Cell>
+    <Cell ss:StyleID="CurrencyStyle"><Data ss:Type="Number">${item.amount}</Data></Cell>
+    <Cell><Data ss:Type="String">${item.date}</Data></Cell>
+    <Cell ss:StyleID="${statusStyle}"><Data ss:Type="String">${item.status}</Data></Cell>
+   </Row>`;
+    });
+
+    // Total Row
+    xml += `
+   <Row ss:StyleID="TotalStyle">
+    <Cell ss:StyleID="TotalStyle"><Data ss:Type="String">Total</Data></Cell>
+    <Cell ss:StyleID="TotalCurrencyStyle"><Data ss:Type="Number">${totalAmount}</Data></Cell>
+    <Cell ss:StyleID="TotalStyle"><Data ss:Type="String"></Data></Cell>
+    <Cell ss:StyleID="TotalStyle"><Data ss:Type="String"></Data></Cell>
+   </Row>
+  </Table>
+ </Worksheet>`;
+  });
+
+  xml += `</Workbook>`;
+
+  const blob = new Blob([xml], { type: "application/vnd.ms-excel" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
 
 export default function CollectionList({ 
   items = [], 
@@ -94,6 +240,22 @@ export default function CollectionList({
     handleCloseForm();
   };
 
+  const handleShareWhatsApp = (item) => {
+    const formattedAmount = Number(item.amount).toLocaleString("en-IN", { 
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2 
+    });
+    
+    const message = `*Collection Details*\n\n` +
+      `• *Description*: ${item.description}\n` +
+      `• *Amount*: ₹${formattedAmount}\n` +
+      `• *Date*: ${item.date}\n` +
+      `• *Status*: ${item.status}`;
+      
+    const encoded = encodeURIComponent(message);
+    window.open(`https://api.whatsapp.com/send?text=${encoded}`, "_blank");
+  };
+
   const handleDeleteClick = (item) => {
     if (confirm(`Are you sure you want to delete "${item.description}"?`)) {
       onDelete(item.id);
@@ -120,13 +282,26 @@ export default function CollectionList({
           <p className="text-xs text-slate-400">Incoming receivables and payments</p>
         </div>
         
-        <button
-          onClick={handleOpenAdd}
-          className="flex items-center gap-1 bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs py-2 px-3.5 rounded-lg transition-colors shadow-sm"
-        >
-          <Plus size={14} />
-          <span>Add Record</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => exportToExcel(items, "Collections_Report.xls")}
+            className="flex items-center gap-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-medium text-xs py-2 px-3.5 rounded-lg transition-colors shadow-sm cursor-pointer"
+            title="Download report in Excel format"
+          >
+            <FileText size={14} className="text-emerald-600" />
+            <span>Export Excel</span>
+          </button>
+          
+          <button
+            type="button"
+            onClick={handleOpenAdd}
+            className="flex items-center gap-1 bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs py-2 px-3.5 rounded-lg transition-colors shadow-sm cursor-pointer"
+          >
+            <Plus size={14} />
+            <span>Add Record</span>
+          </button>
+        </div>
       </div>
 
       {/* Search Input */}
@@ -179,6 +354,17 @@ export default function CollectionList({
                   </td>
                   <td className="py-3 text-right">
                     <div className="flex justify-end items-center gap-1.5 opacity-60 group-hover:opacity-100 transition-opacity">
+                      <button
+                        type="button"
+                        onClick={() => handleShareWhatsApp(item)}
+                        className="p-1 rounded text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer"
+                        title="Share details on WhatsApp"
+                      >
+                        <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                          <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.455L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.625 1.451 5.489 0 9.954-4.464 9.957-9.956.002-2.661-1.034-5.163-2.916-7.047C16.435 1.758 13.93 .717 11.272.717 5.783.717 1.317 5.183 1.315 10.676c-.001 1.705.446 3.371 1.294 4.841l-.974 3.556 3.64-.954zm10.743-5.385c-.29-.145-1.716-.848-1.982-.945-.267-.097-.461-.145-.655.145-.194.29-.752.945-.921 1.139-.17.194-.339.218-.629.073-.29-.145-1.226-.452-2.336-1.441-.864-.77-1.448-1.721-1.618-2.012-.17-.29-.018-.447.127-.591.13-.13.29-.339.436-.509.145-.17.194-.291.291-.485.097-.194.049-.364-.024-.509-.073-.145-.655-1.577-.897-2.158-.236-.569-.475-.491-.655-.5-.17-.008-.364-.01-.558-.01-.194 0-.509.073-.776.364-.267.29-1.02 1.02-1.02 2.487 0 1.467 1.067 2.885 1.213 3.079.145.194 2.1 3.206 5.089 4.495.71.307 1.265.49 1.697.628.713.227 1.36.195 1.872.119.571-.085 1.716-.703 1.958-1.382.242-.679.242-1.261.17-1.382-.073-.12-.267-.194-.558-.339z"/>
+                        </svg>
+                      </button>
+                      
                       <button
                         onClick={() => handleOpenEdit(item)}
                         className="p-1 rounded text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-colors"
