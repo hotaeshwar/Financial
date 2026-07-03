@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   TrendingUp, 
@@ -35,6 +35,7 @@ export default function Home() {
   // Alarm & Reminders states
   const [reminders, setReminders] = useState([]);
   const [activeAlarm, setActiveAlarm] = useState(null);
+  const alarmIntervalRef = useRef(null);
 
   // Sync clock every second
   useEffect(() => {
@@ -79,36 +80,114 @@ export default function Home() {
   }, []);
 
   // Audio tone alerts synthesizer
-  const playAlertSound = () => {
+  const playToneSound = (toneType) => {
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const osc1 = ctx.createOscillator();
-      const osc2 = ctx.createOscillator();
       const gainNode = ctx.createGain();
-
-      osc1.type = "sine";
-      osc1.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
-      osc1.frequency.exponentialRampToValueAtTime(880.00, ctx.currentTime + 0.35); // A5
-
-      osc2.type = "sine";
-      osc2.frequency.setValueAtTime(880.00, ctx.currentTime); // A5
-      osc2.frequency.exponentialRampToValueAtTime(1174.66, ctx.currentTime + 0.35); // D6
-
-      gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.7);
-
-      osc1.connect(gainNode);
-      osc2.connect(gainNode);
       gainNode.connect(ctx.destination);
 
-      osc1.start();
-      osc2.start();
-      osc1.stop(ctx.currentTime + 0.7);
-      osc2.stop(ctx.currentTime + 0.7);
+      if (toneType === "beep") {
+        // Double Beep
+        const osc = ctx.createOscillator();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(987.77, ctx.currentTime); // B5
+        gainNode.gain.setValueAtTime(0.25, ctx.currentTime);
+        
+        osc.connect(gainNode);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.15);
+        
+        setTimeout(() => {
+          try {
+            const osc2 = ctx.createOscillator();
+            osc2.type = "sine";
+            osc2.frequency.setValueAtTime(987.77, ctx.currentTime);
+            osc2.connect(gainNode);
+            osc2.start();
+            osc2.stop(ctx.currentTime + 0.15);
+          } catch (e) {}
+        }, 250);
+      } else if (toneType === "retro") {
+        // Retro warble
+        const osc = ctx.createOscillator();
+        osc.type = "square";
+        osc.frequency.setValueAtTime(600, ctx.currentTime);
+        osc.frequency.setValueAtTime(800, ctx.currentTime + 0.1);
+        osc.frequency.setValueAtTime(600, ctx.currentTime + 0.2);
+        osc.frequency.setValueAtTime(800, ctx.currentTime + 0.3);
+        
+        gainNode.gain.setValueAtTime(0.15, ctx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+        
+        osc.connect(gainNode);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.5);
+      } else if (toneType === "ascending") {
+        // Sweeping ascending sound
+        const osc = ctx.createOscillator();
+        osc.type = "sawtooth";
+        osc.frequency.setValueAtTime(440, ctx.currentTime);
+        osc.frequency.linearRampToValueAtTime(1200, ctx.currentTime + 0.6);
+        
+        gainNode.gain.setValueAtTime(0.1, ctx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.6);
+        
+        osc.connect(gainNode);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.6);
+      } else {
+        // Default Chime
+        const osc1 = ctx.createOscillator();
+        const osc2 = ctx.createOscillator();
+
+        osc1.type = "sine";
+        osc1.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+        osc1.frequency.exponentialRampToValueAtTime(880.00, ctx.currentTime + 0.35); // A5
+
+        osc2.type = "sine";
+        osc2.frequency.setValueAtTime(880.00, ctx.currentTime); // A5
+        osc2.frequency.exponentialRampToValueAtTime(1174.66, ctx.currentTime + 0.35); // D6
+
+        gainNode.gain.setValueAtTime(0.25, ctx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.7);
+
+        osc1.connect(gainNode);
+        osc2.connect(gainNode);
+
+        osc1.start();
+        osc2.start();
+        osc1.stop(ctx.currentTime + 0.7);
+        osc2.stop(ctx.currentTime + 0.7);
+      }
     } catch (e) {
       console.warn("AudioContext failed or blocked by autoplay rules:", e);
     }
   };
+
+  // Loop alarm sound when activeAlarm is active
+  useEffect(() => {
+    if (activeAlarm) {
+      // Play immediately
+      playToneSound(activeAlarm.tone);
+      
+      // Repeat alert sound every 2 seconds
+      alarmIntervalRef.current = setInterval(() => {
+        playToneSound(activeAlarm.tone);
+      }, 2000);
+    } else {
+      if (alarmIntervalRef.current) {
+        clearInterval(alarmIntervalRef.current);
+        alarmIntervalRef.current = null;
+      }
+    }
+
+    return () => {
+      if (alarmIntervalRef.current) {
+        clearInterval(alarmIntervalRef.current);
+        alarmIntervalRef.current = null;
+      }
+    };
+  }, [activeAlarm]);
 
   // Poll for scheduled reminders
   useEffect(() => {
@@ -122,7 +201,6 @@ export default function Home() {
       let didFired = false;
       const updated = reminders.map(rem => {
         if (!rem.fired && rem.date === dateStr && rem.time === timeStr) {
-          playAlertSound();
           setActiveAlarm(rem);
           didFired = true;
           return { ...rem, fired: true };

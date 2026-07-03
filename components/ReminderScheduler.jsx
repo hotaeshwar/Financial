@@ -11,6 +11,7 @@ export default function ReminderScheduler({
   const [desc, setDesc] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [time, setTime] = useState("");
+  const [tone, setTone] = useState("chime");
   const [error, setError] = useState("");
 
   const handleSubmit = (e) => {
@@ -32,12 +33,14 @@ export default function ReminderScheduler({
       description: desc.trim(),
       date,
       time,
+      tone,
       fired: false
     };
 
     onAddReminder(payload);
     setDesc("");
     setTime("");
+    setTone("chime");
     setError("");
   };
 
@@ -97,6 +100,20 @@ export default function ReminderScheduler({
           </div>
         </div>
 
+        <div>
+          <label className="block text-[9px] uppercase font-bold text-slate-400 mb-0.5">Alarm Tone</label>
+          <select
+            value={tone}
+            onChange={(e) => setTone(e.target.value)}
+            className="w-full border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-slate-500 text-slate-700 bg-white"
+          >
+            <option value="chime">🔔 Classic Chime</option>
+            <option value="beep">🚨 Double Beep</option>
+            <option value="retro">👾 Retro Game</option>
+            <option value="ascending">📈 Sweep Up</option>
+          </select>
+        </div>
+
         <button
           type="submit"
           className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs rounded-lg transition-colors shadow-sm flex items-center justify-center gap-1 cursor-pointer"
@@ -124,7 +141,7 @@ export default function ReminderScheduler({
                   <p className={`font-medium ${rem.fired ? "line-through" : ""}`}>{rem.description}</p>
                   <p className="text-[9px] text-slate-400 flex items-center gap-1 mt-0.5">
                     <Calendar size={10} />
-                    <span>{rem.date} @ {rem.time}</span>
+                    <span>{rem.date} @ {rem.time} ({rem.tone === 'beep' ? 'Beep' : rem.tone === 'retro' ? 'Retro' : rem.tone === 'ascending' ? 'Sweep' : 'Chime'})</span>
                     {rem.fired && <span className="text-[8px] bg-slate-200 text-slate-650 px-1 rounded ml-1 font-semibold uppercase">Fired</span>}
                   </p>
                 </div>
