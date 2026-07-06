@@ -545,7 +545,7 @@ export default function Home() {
           />
           <div>
             <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-              <span>{greeting}, Jhank!</span>
+              <span>{greeting}!</span>
             </h1>
             <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-400 mt-1">
               <span>BiD Finance Monitor Dashboard</span>
