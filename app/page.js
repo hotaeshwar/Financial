@@ -549,12 +549,6 @@ export default function Home() {
             </h1>
             <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-400 mt-1">
               <span>BiD Finance Monitor Dashboard</span>
-              {weather.city && (
-                <>
-                  <span className="text-slate-350">•</span>
-                  <span className="text-slate-500 font-medium">in {weather.city}</span>
-                </>
-              )}
               {weather.temp !== null && (
                 <>
                   <span className="text-slate-350">•</span>
