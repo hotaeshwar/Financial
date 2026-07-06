@@ -112,19 +112,30 @@ export default function ReceiptModal({ isOpen, onClose, item, type }) {
       ctx.fillText(val, 540, y);
     };
 
+    const isPartialPayment = item.status?.toLowerCase() === "partial payment";
+
     drawDetailRow("Reference No:", refNo, detailsYStart);
     drawDetailRow("Date:", item.date || "N/A", detailsYStart + rowGap);
     drawDetailRow("Category:", type === "collection" ? "Collection / Income" : "Fixed Expense", detailsYStart + rowGap * 2);
     drawDetailRow("Description:", item.description || "N/A", detailsYStart + rowGap * 3);
     drawDetailRow("Payment Status:", item.status || "N/A", detailsYStart + rowGap * 4);
 
+    if (isPartialPayment) {
+      const formattedPaid = Number(item.paidAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 });
+      const formattedDue = Number((item.amount || 0) - (item.paidAmount || 0)).toLocaleString("en-IN", { minimumFractionDigits: 2 });
+      drawDetailRow("Paid Amount:", `₹${formattedPaid}`, detailsYStart + rowGap * 5);
+      drawDetailRow("Due Amount:", `₹${formattedDue}`, detailsYStart + rowGap * 6);
+    }
+
+    const sep2Y = isPartialPayment ? 515 : 465;
+
     // Dashed separator line 2
     ctx.strokeStyle = "#cbd5e1";
     ctx.lineWidth = 1.5;
     ctx.setLineDash([6, 4]);
     ctx.beginPath();
-    ctx.moveTo(50, 465);
-    ctx.lineTo(550, 465);
+    ctx.moveTo(50, sep2Y);
+    ctx.lineTo(550, sep2Y);
     ctx.stroke();
     ctx.setLineDash([]); // reset
 
@@ -132,12 +143,12 @@ export default function ReceiptModal({ isOpen, onClose, item, type }) {
     ctx.textAlign = "center";
     ctx.fillStyle = "#64748b";
     ctx.font = "12px system-ui, -apple-system, sans-serif";
-    ctx.fillText("TOTAL AMOUNT", 300, 505);
+    ctx.fillText("TOTAL AMOUNT", 300, sep2Y + 40);
 
     // Total Amount Value
     ctx.fillStyle = "#0f172a";
     ctx.font = "bold 38px system-ui, -apple-system, sans-serif";
-    ctx.fillText(`₹${formattedAmount}`, 300, 555);
+    ctx.fillText(`₹${formattedAmount}`, 300, sep2Y + 90);
 
     // Status Badge Draw
     const statusText = item.status?.toUpperCase() || "";
@@ -147,10 +158,9 @@ export default function ReceiptModal({ isOpen, onClose, item, type }) {
     const badgeW = Math.max(textWidth + 24, 110);
     const badgeH = 28;
     const badgeX = 300 - badgeW / 2;
-    const badgeY = 580;
+    const badgeY = sep2Y + 115;
 
-    ctx.fillStyle = isCompleted ? "#dcfce7" : "#fef3c7";
-    // Rounded rect support
+    ctx.fillStyle = isCompleted ? "#dcfce7" : isPartialPayment ? "#e0e7ff" : "#fef3c7";
     if (ctx.roundRect) {
       ctx.beginPath();
       ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 6);
@@ -159,27 +169,27 @@ export default function ReceiptModal({ isOpen, onClose, item, type }) {
       ctx.fillRect(badgeX, badgeY, badgeW, badgeH);
     }
 
-    ctx.fillStyle = isCompleted ? "#15803d" : "#b45309";
+    ctx.fillStyle = isCompleted ? "#15803d" : isPartialPayment ? "#4338ca" : "#b45309";
     ctx.textAlign = "center";
-    ctx.fillText(statusText, 300, 598);
+    ctx.fillText(statusText, 300, badgeY + 18);
 
     // Dashed separator line 3
     ctx.strokeStyle = "#e2e8f0";
     ctx.lineWidth = 1.2;
     ctx.setLineDash([4, 4]);
     ctx.beginPath();
-    ctx.moveTo(50, 650);
-    ctx.lineTo(550, 650);
+    ctx.moveTo(50, sep2Y + 185);
+    ctx.lineTo(550, sep2Y + 185);
     ctx.stroke();
     ctx.setLineDash([]); // reset
 
     // Footer Notes
     ctx.fillStyle = "#94a3b8";
     ctx.font = "11px system-ui, -apple-system, sans-serif";
-    ctx.fillText("Thank you for using BiD Finance", 300, 685);
+    ctx.fillText("Thank you for using BiD Finance", 300, sep2Y + 220);
     
     ctx.font = "9px system-ui, -apple-system, sans-serif";
-    ctx.fillText("This is a system generated transaction receipt and does not require a physical signature.", 300, 705);
+    ctx.fillText("This is a system generated transaction receipt and does not require a physical signature.", 300, sep2Y + 240);
   };
 
   // Convert receipt to PDF and Share via WhatsApp/System native sharing
@@ -233,9 +243,13 @@ export default function ReceiptModal({ isOpen, onClose, item, type }) {
           pdf.save(fileName);
 
           // 2. Open WhatsApp web with structured details
-          const statusEmoji = isCompleted ? "✅" : "⏳";
+          const statusEmoji = isCompleted ? "✅" : item.status?.toLowerCase() === "partial payment" ? "⏳" : "🕒";
           const typeText = type === "collection" ? "COLLECTION RECEIPT" : "EXPENSE RECEIPT";
           
+          const isPartial = item.status?.toLowerCase() === "partial payment";
+          const formattedPaid = isPartial ? Number(item.paidAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 }) : "";
+          const formattedDue = isPartial ? Number((item.amount || 0) - (item.paidAmount || 0)).toLocaleString("en-IN", { minimumFractionDigits: 2 }) : "";
+
           const message = 
             `*${typeText}*\n` +
             `=========================\n` +
@@ -245,7 +259,10 @@ export default function ReceiptModal({ isOpen, onClose, item, type }) {
             `📅 *Date:* ${item.date}\n` +
             `💼 *Category:* ${type === "collection" ? "Incoming Payment" : "Fixed Expense"}\n` +
             `📝 *Description:* ${item.description}\n` +
-            `💰 *Amount:* ₹${formattedAmount}\n` +
+            `💰 *Total Amount:* ₹${formattedAmount}\n` +
+            (isPartial ? 
+              `💵 *Paid Amount:* ₹${formattedPaid}\n` +
+              `🔴 *Due Amount:* ₹${formattedDue}\n` : "") +
             `📊 *Status:* ${statusEmoji} *${item.status?.toUpperCase()}*\n\n` +
             `-------------------------\n` +
             `📥 *PDF Receipt downloaded.* Please drag/attach the downloaded file \`${fileName}\` here to share.`;
@@ -514,13 +531,23 @@ export default function ReceiptModal({ isOpen, onClose, item, type }) {
               <span class="label">Status:</span>
               <span class="value">${item.status}</span>
             </div>
+            ${item.status?.toLowerCase() === "partial payment" ? `
+            <div class="row">
+              <span class="label">Paid Amount:</span>
+              <span class="value">₹${Number(item.paidAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+            </div>
+            <div class="row">
+              <span class="label">Due Amount:</span>
+              <span class="value">₹${Number((item.amount || 0) - (item.paidAmount || 0)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+            </div>
+            ` : ""}
             
             <div class="divider"></div>
             
             <div class="amount-container">
               <div class="amount-label">Total Amount</div>
               <div class="amount">${formattedAmount}</div>
-              <div class="badge ${isCompleted ? "badge-completed" : "badge-pending"}">
+              <div class="badge ${isCompleted ? "badge-completed" : item.status?.toLowerCase() === "partial payment" ? "badge-partial-payment" : "badge-pending"}">
                 ${item.status}
               </div>
             </div>
@@ -622,11 +649,13 @@ export default function ReceiptModal({ isOpen, onClose, item, type }) {
                   {item.description}
                 </span>
               </div>
-              <div className="flex justify-between items-center">
+              <div className="flex justify-between items-center font-semibold">
                 <span className="text-slate-400">Payment Status:</span>
                 <span className={`inline-block border px-2 py-0.5 rounded text-[10px] font-medium tracking-wide ${
                   isCompleted
                     ? "bg-emerald-50 border-emerald-200/50 text-emerald-700"
+                    : item.status?.toLowerCase() === "partial payment"
+                    ? "bg-indigo-50 border-indigo-200/50 text-indigo-700"
                     : item.status?.toLowerCase() === "unpaid"
                     ? "bg-rose-50 border-rose-200/50 text-rose-700"
                     : "bg-amber-50 border-amber-200/50 text-amber-700"
@@ -634,6 +663,22 @@ export default function ReceiptModal({ isOpen, onClose, item, type }) {
                   {item.status}
                 </span>
               </div>
+              {item.status?.toLowerCase() === "partial payment" && (
+                <>
+                  <div className="flex justify-between font-semibold">
+                    <span className="text-slate-400">Paid Amount:</span>
+                    <span className="text-slate-700">
+                      ₹{Number(item.paidAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  <div className="flex justify-between font-semibold">
+                    <span className="text-slate-400">Due Amount:</span>
+                    <span className="text-red-500">
+                      ₹{Number((item.amount || 0) - (item.paidAmount || 0)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Dashed line */}

@@ -233,5 +233,92 @@ export const dbService = {
       saveLocalStorageData("expenses", filtered);
       return id;
     }
+  },
+
+  // --- COMPANIES OPERATIONS ---
+  async getCompanies() {
+    if (!isFirebaseOnline || !db) {
+      return getLocalStorageData("companies");
+    }
+    try {
+      const snap = await getDocs(collection(db, "companies"));
+      const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      saveLocalStorageData("companies", data);
+      return data;
+    } catch (error) {
+      console.warn("Firestore fetch error, reading from local storage:", error);
+      return getLocalStorageData("companies");
+    }
+  },
+
+  async addCompany(item) {
+    if (!isFirebaseOnline || !db) {
+      const local = getLocalStorageData("companies");
+      const newItem = { ...item, id: `local_comp_${Date.now()}` };
+      local.push(newItem);
+      saveLocalStorageData("companies", local);
+      return newItem;
+    }
+    try {
+      const docRef = await addDoc(collection(db, "companies"), item);
+      const newItem = { ...item, id: docRef.id };
+      const local = getLocalStorageData("companies");
+      local.push(newItem);
+      saveLocalStorageData("companies", local);
+      return newItem;
+    } catch (error) {
+      console.warn("Firestore add error, writing to local storage:", error);
+      const local = getLocalStorageData("companies");
+      const newItem = { ...item, id: `local_comp_${Date.now()}` };
+      local.push(newItem);
+      saveLocalStorageData("companies", local);
+      return newItem;
+    }
+  },
+
+  async updateCompany(id, updatedFields) {
+    if (!isFirebaseOnline || !db || String(id).startsWith("local_comp")) {
+      const local = getLocalStorageData("companies");
+      const updated = local.map(item => item.id === id ? { ...item, ...updatedFields } : item);
+      saveLocalStorageData("companies", updated);
+      return { id, ...updatedFields };
+    }
+    try {
+      const docRef = doc(db, "companies", id);
+      await updateDoc(docRef, updatedFields);
+      const local = getLocalStorageData("companies");
+      const updated = local.map(item => item.id === id ? { ...item, ...updatedFields } : item);
+      saveLocalStorageData("companies", updated);
+      return { id, ...updatedFields };
+    } catch (error) {
+      console.warn("Firestore update error, updating local storage:", error);
+      const local = getLocalStorageData("companies");
+      const updated = local.map(item => item.id === id ? { ...item, ...updatedFields } : item);
+      saveLocalStorageData("companies", updated);
+      return { id, ...updatedFields };
+    }
+  },
+
+  async deleteCompany(id) {
+    if (!isFirebaseOnline || !db || String(id).startsWith("local_comp")) {
+      const local = getLocalStorageData("companies");
+      const filtered = local.filter(item => item.id !== id);
+      saveLocalStorageData("companies", filtered);
+      return id;
+    }
+    try {
+      const docRef = doc(db, "companies", id);
+      await deleteDoc(docRef);
+      const local = getLocalStorageData("companies");
+      const filtered = local.filter(item => item.id !== id);
+      saveLocalStorageData("companies", filtered);
+      return id;
+    } catch (error) {
+      console.warn("Firestore delete error, removing from local storage:", error);
+      const local = getLocalStorageData("companies");
+      const filtered = local.filter(item => item.id !== id);
+      saveLocalStorageData("companies", filtered);
+      return id;
+    }
   }
 };

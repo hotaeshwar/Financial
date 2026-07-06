@@ -89,22 +89,39 @@ const exportToExcel = (items, filename) => {
     const monthItems = groups[month];
     xml += `
  <Worksheet ss:Name="${month.replace(/[\\/\\?\\*\\]\\[]/g, "")}">
-  <Table ss:ExpandedColumnCount="4" ss:ExpandedRowCount="${monthItems.length + 2}" x:FullColumns="1"
+  <Table ss:ExpandedColumnCount="6" ss:ExpandedRowCount="${monthItems.length + 2}" x:FullColumns="1"
    x:FullRows="1" ss:DefaultRowHeight="20">
    <Column ss:AutoFitWidth="0" ss:Width="200"/>
-   <Column ss:AutoFitWidth="0" ss:Width="120"/>
+   <Column ss:AutoFitWidth="0" ss:Width="110"/>
+   <Column ss:AutoFitWidth="0" ss:Width="110"/>
+   <Column ss:AutoFitWidth="0" ss:Width="110"/>
    <Column ss:AutoFitWidth="0" ss:Width="100"/>
    <Column ss:AutoFitWidth="0" ss:Width="100"/>
    <Row ss:AutoFitHeight="0" ss:Height="25">
     <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Description</Data></Cell>
-    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Amount</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Total Amount</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Paid Amount</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Due Amount</Data></Cell>
     <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Date</Data></Cell>
     <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Status</Data></Cell>
    </Row>`;
 
     let totalAmount = 0;
+    let totalPaid = 0;
+    let totalDue = 0;
     monthItems.forEach(item => {
-      totalAmount += Number(item.amount || 0);
+      const amt = Number(item.amount || 0);
+      const paid = item.status?.toLowerCase() === "received" 
+        ? amt 
+        : item.status?.toLowerCase() === "partial payment" 
+        ? Number(item.paidAmount || 0) 
+        : 0;
+      const due = amt - paid;
+
+      totalAmount += amt;
+      totalPaid += paid;
+      totalDue += due;
+
       const statusLower = (item.status || "").toLowerCase();
       let statusStyle = "Default";
       if (statusLower === "paid" || statusLower === "received") {
@@ -113,14 +130,16 @@ const exportToExcel = (items, filename) => {
         statusStyle = "UnpaidStyle";
       } else if (statusLower === "pending") {
         statusStyle = "PendingStyle";
-      } else if (statusLower === "processing") {
+      } else if (statusLower === "partial payment") {
         statusStyle = "ProcessingStyle";
       }
 
       xml += `
    <Row>
     <Cell><Data ss:Type="String">${item.description}</Data></Cell>
-    <Cell ss:StyleID="CurrencyStyle"><Data ss:Type="Number">${item.amount}</Data></Cell>
+    <Cell ss:StyleID="CurrencyStyle"><Data ss:Type="Number">${amt}</Data></Cell>
+    <Cell ss:StyleID="CurrencyStyle"><Data ss:Type="Number">${paid}</Data></Cell>
+    <Cell ss:StyleID="CurrencyStyle"><Data ss:Type="Number">${due}</Data></Cell>
     <Cell><Data ss:Type="String">${item.date}</Data></Cell>
     <Cell ss:StyleID="${statusStyle}"><Data ss:Type="String">${item.status}</Data></Cell>
    </Row>`;
@@ -131,6 +150,8 @@ const exportToExcel = (items, filename) => {
    <Row ss:StyleID="TotalStyle">
     <Cell ss:StyleID="TotalStyle"><Data ss:Type="String">Total</Data></Cell>
     <Cell ss:StyleID="TotalCurrencyStyle"><Data ss:Type="Number">${totalAmount}</Data></Cell>
+    <Cell ss:StyleID="TotalCurrencyStyle"><Data ss:Type="Number">${totalPaid}</Data></Cell>
+    <Cell ss:StyleID="TotalCurrencyStyle"><Data ss:Type="Number">${totalDue}</Data></Cell>
     <Cell ss:StyleID="TotalStyle"><Data ss:Type="String"></Data></Cell>
     <Cell ss:StyleID="TotalStyle"><Data ss:Type="String"></Data></Cell>
    </Row>
@@ -166,6 +187,7 @@ export default function CollectionList({
   const [formData, setFormData] = useState({
     description: "",
     amount: "",
+    paidAmount: "",
     date: "",
     status: "Pending"
   });
@@ -178,6 +200,7 @@ export default function CollectionList({
     setFormData({
       description: "",
       amount: "",
+      paidAmount: "",
       date: new Date().toISOString().split("T")[0],
       status: "Pending"
     });
@@ -191,6 +214,7 @@ export default function CollectionList({
     setFormData({
       description: item.description,
       amount: item.amount.toString(),
+      paidAmount: item.paidAmount !== undefined ? item.paidAmount.toString() : "",
       date: item.date,
       status: item.status || ""
     });
@@ -227,9 +251,25 @@ export default function CollectionList({
       return;
     }
 
+    let finalPaidAmount = 0;
+    if (formData.status === "Partial Payment") {
+      if (!formData.paidAmount || isNaN(formData.paidAmount) || Number(formData.paidAmount) <= 0) {
+        setError("Paid amount must be a positive number.");
+        return;
+      }
+      if (Number(formData.paidAmount) >= Number(formData.amount)) {
+        setError("Paid amount for partial payment must be less than total amount (otherwise set status to Received).");
+        return;
+      }
+      finalPaidAmount = Number(formData.paidAmount);
+    } else if (formData.status === "Received") {
+      finalPaidAmount = Number(formData.amount);
+    }
+
     const payload = {
       description: formData.description.trim(),
       amount: Number(formData.amount),
+      paidAmount: finalPaidAmount,
       date: formData.date,
       status: formData.status.trim()
     };
@@ -326,15 +366,20 @@ export default function CollectionList({
                 <tr key={item.id} className="hover:bg-slate-50/50 transition-colors group">
                   <td className="py-3 font-medium text-slate-800 max-w-[150px] truncate">{item.description}</td>
                   <td className="py-3 font-semibold text-slate-700 text-right">
-                    ₹{Number(item.amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                    <div>₹{Number(item.amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</div>
+                    {item.status?.toLowerCase() === "partial payment" && (
+                      <div className="text-[10px] text-slate-400 font-normal">
+                        Paid: ₹{Number(item.paidAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })} | Due: ₹{Number((item.amount || 0) - (item.paidAmount || 0)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </div>
+                    )}
                   </td>
                   <td className="py-3 text-slate-400 text-center whitespace-nowrap">{item.date}</td>
                   <td className="py-3 text-center">
                     <span className={`inline-block border px-2 py-0.5 rounded text-[10px] font-medium tracking-wide ${
                       item.status?.toLowerCase() === "received"
                         ? "bg-emerald-50 border-emerald-200/50 text-emerald-700"
-                        : item.status?.toLowerCase() === "processing"
-                        ? "bg-blue-50 border-blue-200/50 text-blue-700"
+                        : item.status?.toLowerCase() === "partial payment"
+                        ? "bg-indigo-50 border-indigo-200/50 text-indigo-700"
                         : item.status?.toLowerCase() === "pending"
                         ? "bg-amber-50 border-amber-200/50 text-amber-700"
                         : "bg-slate-50 border-slate-200/50 text-slate-700"
@@ -478,10 +523,46 @@ export default function CollectionList({
                     >
                       <option value="Pending">Pending</option>
                       <option value="Received">Received</option>
-                      <option value="Processing">Processing</option>
+                      <option value="Partial Payment">Partial Payment</option>
                     </select>
                   </div>
                 </div>
+
+                {/* Paid Amount (only for Partial Payment status) */}
+                {formData.status === "Partial Payment" && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="space-y-3 pt-1"
+                  >
+                    <div>
+                      <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Paid Amount (₹)</label>
+                      <div className="relative">
+                        <span className="absolute inset-y-0 left-0 flex items-center pl-2.5 pointer-events-none text-slate-400">
+                          <IndianRupee size={12} />
+                        </span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          name="paidAmount"
+                          value={formData.paidAmount}
+                          onChange={handleChange}
+                          placeholder="0.00"
+                          className="w-full pl-7 pr-3 border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-slate-500 text-slate-700"
+                        />
+                      </div>
+                    </div>
+                    {formData.amount && !isNaN(formData.amount) && (
+                      <div className="p-2 bg-slate-50 border border-slate-200 rounded text-[10px] text-slate-600 flex justify-between font-semibold">
+                        <span>Remaining Balance:</span>
+                        <span className="text-red-500">
+                          ₹{Number(formData.amount - (formData.paidAmount || 0)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
 
                 {/* Buttons */}
                 <div className="flex gap-2 pt-2 border-t border-slate-100">

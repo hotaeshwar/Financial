@@ -1,14 +1,13 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Sparkles, Send, Bot, User, HelpCircle, CheckCircle } from "lucide-react";
-import { motion } from "framer-motion";
+import { Sparkles, Send } from "lucide-react";
 
 export default function AiAdvisor({ collections = [], expenses = [] }) {
   const [askQuery, setAskQuery] = useState("");
   const [chatLog, setChatLog] = useState([]);
   const [typingText, setTypingText] = useState("");
-  const chatEndRef = useRef(null);
+  const chatContainerRef = useRef(null);
 
   // Computations
   const totalCols = collections.reduce((sum, i) => sum + Number(i.amount || 0), 0);
@@ -50,7 +49,9 @@ ${netSurplus < 0 ? "Warning: You are running an operational deficit. Consider cu
   }, [collections, expenses]);
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
   }, [chatLog]);
 
   const handleAskAI = (e) => {
@@ -103,7 +104,10 @@ ${netSurplus < 0 ? "Warning: You are running an operational deficit. Consider cu
       </div>
 
       {/* Mini Chat logs */}
-      <div className="space-y-2 max-h-[140px] overflow-y-auto custom-scrollbar border-t border-slate-100 pt-3">
+      <div 
+        ref={chatContainerRef} 
+        className="space-y-2 max-h-[140px] overflow-y-auto custom-scrollbar border-t border-slate-100 pt-3"
+      >
         {chatLog.map((chat, idx) => (
           <div key={idx} className={`flex ${chat.sender === "user" ? "justify-end" : "justify-start"}`}>
             <div className={`max-w-[85%] rounded-lg p-2 text-xs font-light ${
@@ -118,7 +122,6 @@ ${netSurplus < 0 ? "Warning: You are running an operational deficit. Consider cu
             </div>
           </div>
         ))}
-        <div ref={chatEndRef} />
       </div>
 
       {/* Query input box */}

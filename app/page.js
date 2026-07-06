@@ -18,7 +18,12 @@ import {
   CloudRain,
   CloudDrizzle,
   CloudLightning,
-  Snowflake
+  Snowflake,
+  Building2,
+  ChevronDown,
+  Plus,
+  Trash2,
+  Edit3
 } from "lucide-react";
 import CollectionList from "@/components/CollectionList";
 import FixedExpenses from "@/components/FixedExpenses";
@@ -32,8 +37,14 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState("ledger"); // "ledger" or "analytics"
   const [collections, setCollections] = useState([]);
   const [expenses, setExpenses] = useState([]);
+  const [companies, setCompanies] = useState([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState("");
   const [isDbOnline, setIsDbOnline] = useState(true);
   const [toasts, setToasts] = useState([]);
+  const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
+  const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
+  const [editingCompany, setEditingCompany] = useState(null);
+  const [companyNameInput, setCompanyNameInput] = useState("");
 
   // Time & Clock states
   const [currentTime, setCurrentTime] = useState("");
@@ -71,11 +82,30 @@ export default function Home() {
         const connection = await checkDbConnection();
         setIsDbOnline(connection);
         
+        // Fetch companies
+        let comps = await dbService.getCompanies();
+        if (!comps || comps.length === 0) {
+          const defaultComp = await dbService.addCompany({
+            name: "Main Company",
+            createdAt: new Date().toISOString()
+          });
+          comps = [defaultComp];
+        }
+        setCompanies(comps);
+        
+        const activeCompId = comps[0]?.id;
+        setSelectedCompanyId(activeCompId);
+        
+        // Fetch collections and expenses
         const cols = await dbService.getCollections();
         const exps = await dbService.getExpenses();
         
-        setCollections(cols);
-        setExpenses(exps);
+        // Ensure all existing items have a companyId
+        const mappedCols = cols.map(c => c.companyId ? c : { ...c, companyId: activeCompId });
+        const mappedExps = exps.map(e => e.companyId ? e : { ...e, companyId: activeCompId });
+        
+        setCollections(mappedCols);
+        setExpenses(mappedExps);
       } catch (err) {
         console.error("Error loading finance records:", err);
         addToast("Failed to load records from database. Using local cache.", "warning");
@@ -133,11 +163,36 @@ export default function Home() {
     };
 
     const getGeoAndWeather = async () => {
+      // 1. Try Free IP API first (silent, no permission popup, accurate to city level)
+      try {
+        const ipRes = await fetch("https://freeipapi.com/api/json");
+        const ipData = await ipRes.json();
+        if (ipData && ipData.latitude && ipData.longitude) {
+          await fetchWeather(ipData.latitude, ipData.longitude, ipData.cityName || "your area");
+          return;
+        }
+      } catch (e) {
+        console.warn("FreeIPAPI failed, trying ipapi.co fallback:", e.message);
+      }
+
+      // 2. Try ipapi.co as secondary silent fallback
+      try {
+        const ipRes = await fetch("https://ipapi.co/json/");
+        const ipData = await ipRes.json();
+        if (ipData && ipData.latitude && ipData.longitude) {
+          await fetchWeather(ipData.latitude, ipData.longitude, ipData.city || "your area");
+          return;
+        }
+      } catch (e) {
+        console.warn("ipapi.co fallback failed:", e.message);
+      }
+
+      // 3. Fallback to browser GPS geolocation if both silent options fail
       if (typeof window !== "undefined" && navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           async (position) => {
             const { latitude, longitude } = position.coords;
-            let city = "your location";
+            let city = "your area";
             try {
               const geoRes = await fetch(
                 `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
@@ -147,34 +202,15 @@ export default function Home() {
                 city = geoData.address.city || geoData.address.town || geoData.address.village || "your area";
               }
             } catch (e) {
-              console.warn("Reverse geocode failed, using coordinates");
+              console.warn("Reverse geocode failed, using default");
             }
-            fetchWeather(latitude, longitude, city);
+            await fetchWeather(latitude, longitude, city);
           },
-          async (error) => {
-            console.warn("Geolocation failed/blocked, falling back to IP lookup:", error.message);
-            try {
-              const ipRes = await fetch("https://ipapi.co/json/");
-              const ipData = await ipRes.json();
-              if (ipData && ipData.latitude && ipData.longitude) {
-                fetchWeather(ipData.latitude, ipData.longitude, ipData.city || "your area");
-              }
-            } catch (ipErr) {
-              console.error("IP geolocation failed:", ipErr);
-            }
+          (error) => {
+            console.warn("All geolocation options failed:", error.message);
           },
-          { timeout: 8000 }
+          { timeout: 5000 }
         );
-      } else {
-        try {
-          const ipRes = await fetch("https://ipapi.co/json/");
-          const ipData = await ipRes.json();
-          if (ipData && ipData.latitude && ipData.longitude) {
-            fetchWeather(ipData.latitude, ipData.longitude, ipData.city || "your area");
-          }
-        } catch (ipErr) {
-          console.error("IP geolocation failed:", ipErr);
-        }
       }
     };
 
@@ -351,10 +387,79 @@ export default function Home() {
     addToast("Reminder alarm removed.");
   };
 
+  // --- COMPANIES CRUD CALLBACKS ---
+  const handleAddCompany = async () => {
+    if (!companyNameInput.trim()) return;
+    try {
+      const newComp = await dbService.addCompany({
+        name: companyNameInput.trim(),
+        createdAt: new Date().toISOString()
+      });
+      setCompanies(prev => [...prev, newComp]);
+      setSelectedCompanyId(newComp.id);
+      setIsCompanyModalOpen(false);
+      setCompanyNameInput("");
+      addToast(`Company "${newComp.name}" created!`);
+    } catch (err) {
+      addToast("Failed to create company.", "error");
+    }
+  };
+
+  const handleUpdateCompany = async () => {
+    if (!companyNameInput.trim() || !editingCompany) return;
+    try {
+      const updated = await dbService.updateCompany(editingCompany.id, {
+        name: companyNameInput.trim()
+      });
+      setCompanies(prev => prev.map(c => c.id === editingCompany.id ? { ...c, ...updated } : c));
+      setIsCompanyModalOpen(false);
+      setEditingCompany(null);
+      setCompanyNameInput("");
+      addToast("Company renamed successfully!");
+    } catch (err) {
+      addToast("Failed to rename company.", "error");
+    }
+  };
+
+  const handleDeleteCompany = async (compId) => {
+    const comp = companies.find(c => c.id === compId);
+    if (!comp) return;
+    if (companies.length <= 1) {
+      addToast("You must keep at least one company.", "warning");
+      return;
+    }
+    if (confirm(`Are you sure you want to delete "${comp.name}"? This will permanently delete all its records.`)) {
+      try {
+        await dbService.deleteCompany(compId);
+        
+        // Delete all associated items in Firebase
+        const colsToDelete = collections.filter(c => c.companyId === compId);
+        for (const col of colsToDelete) {
+          await dbService.deleteCollection(col.id);
+        }
+        const expsToDelete = expenses.filter(e => e.companyId === compId);
+        for (const exp of expsToDelete) {
+          await dbService.deleteExpense(exp.id);
+        }
+        
+        setCollections(prev => prev.filter(c => c.companyId !== compId));
+        setExpenses(prev => prev.filter(e => e.companyId !== compId));
+        
+        const remaining = companies.filter(c => c.id !== compId);
+        setCompanies(remaining);
+        setSelectedCompanyId(remaining[0].id);
+        addToast(`Company "${comp.name}" and its records deleted.`);
+      } catch (err) {
+        addToast("Failed to delete company.", "error");
+      }
+    }
+  };
+
   // --- COLLECTIONS CRUD CALLBACKS ---
   const handleAddCollection = async (payload) => {
     try {
-      const newItem = await dbService.addCollection(payload);
+      const payloadWithCompany = { ...payload, companyId: selectedCompanyId };
+      const newItem = await dbService.addCollection(payloadWithCompany);
       setCollections(prev => [...prev, newItem]);
       addToast(`Collection "${payload.description}" added successfully!`);
     } catch (err) {
@@ -364,7 +469,8 @@ export default function Home() {
 
   const handleUpdateCollection = async (id, payload) => {
     try {
-      const updated = await dbService.updateCollection(id, payload);
+      const payloadWithCompany = { ...payload, companyId: selectedCompanyId };
+      const updated = await dbService.updateCollection(id, payloadWithCompany);
       setCollections(prev => prev.map(item => item.id === id ? { ...item, ...updated } : item));
       addToast(`Collection "${payload.description}" updated successfully!`);
     } catch (err) {
@@ -385,7 +491,8 @@ export default function Home() {
   // --- EXPENSES CRUD CALLBACKS ---
   const handleAddExpense = async (payload) => {
     try {
-      const newItem = await dbService.addExpense(payload);
+      const payloadWithCompany = { ...payload, companyId: selectedCompanyId };
+      const newItem = await dbService.addExpense(payloadWithCompany);
       setExpenses(prev => [...prev, newItem]);
       addToast(`Expense "${payload.description}" logged successfully!`);
     } catch (err) {
@@ -395,7 +502,8 @@ export default function Home() {
 
   const handleUpdateExpense = async (id, payload) => {
     try {
-      const updated = await dbService.updateExpense(id, payload);
+      const payloadWithCompany = { ...payload, companyId: selectedCompanyId };
+      const updated = await dbService.updateExpense(id, payloadWithCompany);
       setExpenses(prev => prev.map(item => item.id === id ? { ...item, ...updated } : item));
       addToast(`Expense "${payload.description}" updated successfully!`);
     } catch (err) {
@@ -413,9 +521,13 @@ export default function Home() {
     }
   };
 
+  // --- FILTERED COLLECTIONS & EXPENSES BY ACTIVE COMPANY ---
+  const activeCollections = collections.filter(c => c.companyId === selectedCompanyId);
+  const activeExpenses = expenses.filter(e => e.companyId === selectedCompanyId);
+
   // --- SUMMARY CALCULATIONS ---
-  const totalCollectionsValue = collections.reduce((sum, i) => sum + Number(i.amount || 0), 0);
-  const totalExpensesValue = expenses.reduce((sum, i) => sum + Number(i.amount || 0), 0);
+  const totalCollectionsValue = activeCollections.reduce((sum, i) => sum + Number(i.amount || 0), 0);
+  const totalExpensesValue = activeExpenses.reduce((sum, i) => sum + Number(i.amount || 0), 0);
   const netBalance = totalCollectionsValue - totalExpensesValue;
 
   return (
@@ -487,6 +599,114 @@ export default function Home() {
       ) : (
         <div className="max-w-7xl mx-auto space-y-8">
           
+          {/* Company Selector Bar */}
+          <div className="bg-white/80 border border-slate-200/80 rounded-2xl p-4 shadow-sm backdrop-blur-md flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-slate-900 text-white rounded-xl">
+                <Building2 size={18} className="animate-pulse" />
+              </div>
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-450">Active Entity</span>
+                <div className="relative mt-0.5">
+                  <button
+                    onClick={() => setIsCompanyDropdownOpen(!isCompanyDropdownOpen)}
+                    className="flex items-center gap-1.5 text-base font-bold text-slate-800 focus:outline-none hover:text-slate-600 transition-colors cursor-pointer"
+                  >
+                    <span>{companies.find(c => c.id === selectedCompanyId)?.name || "Select Business"}</span>
+                    <ChevronDown size={15} className={`text-slate-500 transition-transform duration-250 ${isCompanyDropdownOpen ? "rotate-180" : ""}`} />
+                  </button>
+
+                  <AnimatePresence>
+                    {isCompanyDropdownOpen && (
+                      <>
+                        <div 
+                          className="fixed inset-0 z-30" 
+                          onClick={() => setIsCompanyDropdownOpen(false)}
+                        />
+                        <motion.div
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 10 }}
+                          className="absolute left-0 mt-2 w-64 bg-white border border-slate-200 rounded-xl shadow-lg z-40 overflow-hidden"
+                        >
+                          <div className="p-2 max-h-60 overflow-y-auto custom-scrollbar">
+                            {companies.map((comp) => (
+                              <div
+                                key={comp.id}
+                                className={`flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 transition-colors ${
+                                  comp.id === selectedCompanyId ? "bg-slate-100/70" : ""
+                                }`}
+                              >
+                                <button
+                                  onClick={() => {
+                                    setSelectedCompanyId(comp.id);
+                                    setIsCompanyDropdownOpen(false);
+                                  }}
+                                  className="flex-1 text-left text-xs font-semibold text-slate-700 cursor-pointer"
+                                >
+                                  {comp.name}
+                                </button>
+                                <div className="flex items-center gap-1 opacity-40 hover:opacity-100 transition-opacity">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditingCompany(comp);
+                                      setCompanyNameInput(comp.name);
+                                      setIsCompanyModalOpen(true);
+                                      setIsCompanyDropdownOpen(false);
+                                    }}
+                                    className="p-1 text-slate-500 hover:text-slate-700 rounded transition-colors"
+                                    title="Rename Business"
+                                  >
+                                    <Edit3 size={11} />
+                                  </button>
+                                  {companies.length > 1 && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteCompany(comp.id);
+                                        setIsCompanyDropdownOpen(false);
+                                      }}
+                                      className="p-1 text-red-500 hover:text-red-700 rounded transition-colors"
+                                      title="Delete Business"
+                                    >
+                                      <Trash2 size={11} />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="border-t border-slate-100 p-2 bg-slate-50">
+                            <button
+                              onClick={() => {
+                                setEditingCompany(null);
+                                setCompanyNameInput("");
+                                setIsCompanyModalOpen(true);
+                                setIsCompanyDropdownOpen(false);
+                              }}
+                              className="w-full py-1.5 px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                            >
+                              <Plus size={12} />
+                              <span>Add Company</span>
+                            </button>
+                          </div>
+                        </motion.div>
+                      </>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>
+            </div>
+
+            <div className="text-left sm:text-right">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-455">Active Portfolio</span>
+              <p className="text-xs font-semibold text-slate-600 mt-0.5">
+                {companies.length} business entities managed
+              </p>
+            </div>
+          </div>
+
           {/* Summary Metric Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Total Collections Card */}
@@ -577,13 +797,13 @@ export default function Home() {
                   className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start"
                 >
                   <CollectionList
-                    items={collections}
+                    items={activeCollections}
                     onAdd={handleAddCollection}
                     onUpdate={handleUpdateCollection}
                     onDelete={handleDeleteCollection}
                   />
                   <FixedExpenses
-                    items={expenses}
+                    items={activeExpenses}
                     onAdd={handleAddExpense}
                     onUpdate={handleUpdateExpense}
                     onDelete={handleDeleteExpense}
@@ -600,16 +820,16 @@ export default function Home() {
                 >
                   {/* Monthly Comparison Graph */}
                   <FinanceChart 
-                    collections={collections} 
-                    expenses={expenses} 
+                    collections={activeCollections} 
+                    expenses={activeExpenses} 
                   />
 
                   {/* AI Analysis and Alarm Scheduler */}
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     <div className="lg:col-span-2">
                       <AiAdvisor 
-                        collections={collections} 
-                        expenses={expenses} 
+                        collections={activeCollections} 
+                        expenses={activeExpenses} 
                       />
                     </div>
                     <div className="lg:col-span-1">
@@ -656,6 +876,60 @@ export default function Home() {
               >
                 Dismiss Alarm
               </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Company Modal */}
+      <AnimatePresence>
+        {isCompanyModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-sm bg-white border border-slate-100 rounded-xl overflow-hidden shadow-2xl p-6 space-y-4"
+            >
+              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                <h4 className="font-bold text-sm text-slate-800">
+                  {editingCompany ? "Rename Business" : "Create New Business"}
+                </h4>
+                <button
+                  onClick={() => setIsCompanyModalOpen(false)}
+                  className="text-slate-400 hover:text-slate-600 rounded-lg p-1 transition-colors cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-slate-450 mb-1">Company Name</label>
+                <input
+                  type="text"
+                  value={companyNameInput}
+                  onChange={(e) => setCompanyNameInput(e.target.value)}
+                  placeholder="e.g. Concrete Deliveries Ltd."
+                  className="w-full border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-slate-500 text-slate-700 font-medium"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsCompanyModalOpen(false)}
+                  className="flex-1 py-2 text-xs border border-slate-200 hover:bg-slate-50 text-slate-500 font-semibold rounded-lg transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={editingCompany ? handleUpdateCompany : handleAddCompany}
+                  disabled={!companyNameInput.trim()}
+                  className="flex-1 py-2 text-xs bg-slate-900 text-white font-semibold rounded-lg hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                >
+                  Save Business
+                </button>
+              </div>
             </motion.div>
           </div>
         )}
