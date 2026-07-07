@@ -30,14 +30,16 @@ import FixedExpenses from "@/components/FixedExpenses";
 import FinanceChart from "@/components/FinanceChart";
 import AiAdvisor from "@/components/AiAdvisor";
 import ReminderScheduler from "@/components/ReminderScheduler";
+import Bookkeeping from "@/components/Bookkeeping";
 import { dbService, checkDbConnection } from "@/data/firebase";
 
 export default function Home() {
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("ledger"); // "ledger" or "analytics"
+  const [activeTab, setActiveTab] = useState("ledger"); // "ledger", "analytics" or "bookkeeping"
   const [collections, setCollections] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [companies, setCompanies] = useState([]);
+  const [bookkeepings, setBookkeepings] = useState([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
   const [isDbOnline, setIsDbOnline] = useState(true);
   const [toasts, setToasts] = useState([]);
@@ -45,6 +47,8 @@ export default function Home() {
   const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
   const [editingCompany, setEditingCompany] = useState(null);
   const [companyNameInput, setCompanyNameInput] = useState("");
+
+  const [isMounted, setIsMounted] = useState(false);
 
   // Time & Clock states
   const [currentTime, setCurrentTime] = useState("");
@@ -65,6 +69,7 @@ export default function Home() {
 
   // Sync clock every second
   useEffect(() => {
+    setIsMounted(true);
     const tickTime = () => {
       const now = new Date();
       setCurrentTime(now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit" }));
@@ -96,16 +101,19 @@ export default function Home() {
         const activeCompId = comps[0]?.id;
         setSelectedCompanyId(activeCompId);
         
-        // Fetch collections and expenses
+        // Fetch collections, expenses and bookkeeping records
         const cols = await dbService.getCollections();
         const exps = await dbService.getExpenses();
+        const bks = await dbService.getBookkeepings ? await dbService.getBookkeepings() : [];
         
         // Ensure all existing items have a companyId
         const mappedCols = cols.map(c => c.companyId ? c : { ...c, companyId: activeCompId });
         const mappedExps = exps.map(e => e.companyId ? e : { ...e, companyId: activeCompId });
+        const mappedBks = bks.map(b => b.companyId ? b : { ...b, companyId: activeCompId });
         
         setCollections(mappedCols);
         setExpenses(mappedExps);
+        setBookkeepings(mappedBks);
       } catch (err) {
         console.error("Error loading finance records:", err);
         addToast("Failed to load records from database. Using local cache.", "warning");
@@ -407,11 +415,35 @@ export default function Home() {
 
   const handleUpdateCompany = async () => {
     if (!companyNameInput.trim() || !editingCompany) return;
+    const oldName = editingCompany.name;
+    const newName = companyNameInput.trim();
     try {
       const updated = await dbService.updateCompany(editingCompany.id, {
-        name: companyNameInput.trim()
+        name: newName
       });
       setCompanies(prev => prev.map(c => c.id === editingCompany.id ? { ...c, ...updated } : c));
+      
+      // Update bookkeeping items associated with this company in Firebase & state
+      const bksToUpdate = bookkeepings.filter(b => b.companyId === editingCompany.id);
+      for (const bk of bksToUpdate) {
+        const updatedFields = { clientName: newName };
+        if (bk.paidBy === oldName || bk.paidBy === "Main Company") {
+          updatedFields.paidBy = newName;
+        }
+        await dbService.updateBookkeeping(bk.id, updatedFields);
+      }
+
+      setBookkeepings(prev => prev.map(b => {
+        if (b.companyId === editingCompany.id) {
+          const updatedB = { ...b, clientName: newName };
+          if (b.paidBy === oldName || b.paidBy === "Main Company") {
+            updatedB.paidBy = newName;
+          }
+          return updatedB;
+        }
+        return b;
+      }));
+
       setIsCompanyModalOpen(false);
       setEditingCompany(null);
       setCompanyNameInput("");
@@ -441,9 +473,16 @@ export default function Home() {
         for (const exp of expsToDelete) {
           await dbService.deleteExpense(exp.id);
         }
+        const bksToDelete = bookkeepings.filter(b => b.companyId === compId);
+        for (const bk of bksToDelete) {
+          if (dbService.deleteBookkeeping) {
+            await dbService.deleteBookkeeping(bk.id);
+          }
+        }
         
         setCollections(prev => prev.filter(c => c.companyId !== compId));
         setExpenses(prev => prev.filter(e => e.companyId !== compId));
+        setBookkeepings(prev => prev.filter(b => b.companyId !== compId));
         
         const remaining = companies.filter(c => c.id !== compId);
         setCompanies(remaining);
@@ -521,9 +560,43 @@ export default function Home() {
     }
   };
 
+  // --- BOOKKEEPING CRUD CALLBACKS ---
+  const handleAddBookkeeping = async (payload) => {
+    try {
+      const payloadWithCompany = { ...payload, companyId: selectedCompanyId };
+      const newItem = await dbService.addBookkeeping(payloadWithCompany);
+      setBookkeepings(prev => [...prev, newItem]);
+      addToast("Bookkeeping service record saved successfully!");
+    } catch (err) {
+      addToast("Failed to save bookkeeping record.", "error");
+    }
+  };
+
+  const handleUpdateBookkeeping = async (id, payload) => {
+    try {
+      const payloadWithCompany = { ...payload, companyId: selectedCompanyId };
+      const updated = await dbService.updateBookkeeping(id, payloadWithCompany);
+      setBookkeepings(prev => prev.map(item => item.id === id ? { ...item, ...updated } : item));
+      addToast("Bookkeeping record updated successfully!");
+    } catch (err) {
+      addToast("Failed to update bookkeeping record.", "error");
+    }
+  };
+
+  const handleDeleteBookkeeping = async (id) => {
+    try {
+      await dbService.deleteBookkeeping(id);
+      setBookkeepings(prev => prev.filter(item => item.id !== id));
+      addToast("Bookkeeping record deleted.");
+    } catch (err) {
+      addToast("Failed to delete bookkeeping record.", "error");
+    }
+  };
+
   // --- FILTERED COLLECTIONS & EXPENSES BY ACTIVE COMPANY ---
   const activeCollections = collections.filter(c => c.companyId === selectedCompanyId);
   const activeExpenses = expenses.filter(e => e.companyId === selectedCompanyId);
+  const activeBookkeepings = bookkeepings.filter(b => b.companyId === selectedCompanyId);
 
   // --- SUMMARY CALCULATIONS ---
   const totalCollectionsValue = activeCollections.reduce((sum, i) => sum + Number(i.amount || 0), 0);
@@ -531,7 +604,7 @@ export default function Home() {
   const netBalance = totalCollectionsValue - totalExpensesValue;
 
   return (
-    <div className="min-h-screen bg-slate-50/50 p-6 md:p-10 relative">
+    <div className="min-h-screen bg-slate-50/50 p-6 md:p-10 relative" suppressHydrationWarning>
       
       {/* Top Banner Header with logo & live clock */}
       <header className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-200 pb-5 mb-8 gap-4">
@@ -549,12 +622,12 @@ export default function Home() {
             </h1>
             <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-400 mt-1">
               <span>BiD Finance Monitor Dashboard</span>
-              {weather.temp !== null && (
+              {isMounted && weather.temp !== null && (
                 <>
                   <span className="text-slate-350">•</span>
                   <span className="flex items-center gap-1 text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200/50 font-semibold text-[10px]">
                     {getWeatherIcon(weather.code)}
-                    <span>{weather.temp}°C</span>
+                    <span>{weather.city ? `${weather.city.toUpperCase()} • ` : ""}{weather.temp}°C</span>
                   </span>
                 </>
               )}
@@ -569,7 +642,7 @@ export default function Home() {
             <p className="text-[9px] uppercase font-bold tracking-wider text-slate-400">Current Time</p>
             <p className="text-xs font-semibold text-slate-850 tabular-nums flex items-center gap-1.5 justify-center mt-0.5">
               <ClockIcon size={11} className="text-slate-500" />
-              <span>{currentTime || "--:--:--"}</span>
+              <span>{isMounted ? currentTime : "--:--:--"}</span>
             </p>
           </div>
 
@@ -577,7 +650,7 @@ export default function Home() {
           <div className="bg-white border border-slate-200 shadow-sm rounded-xl px-4 py-2 text-center min-w-[155px]">
             <p className="text-[9px] uppercase font-bold tracking-wider text-slate-400">Date</p>
             <p className="text-xs font-semibold text-slate-850 mt-0.5 whitespace-nowrap">
-              {currentDate || "Loading Date..."}
+              {isMounted ? currentDate : "Loading Date..."}
             </p>
           </div>
         </div>
@@ -601,13 +674,27 @@ export default function Home() {
               </div>
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-450">Active Entity</span>
-                <div className="relative mt-0.5">
+                <div className="relative mt-0.5 flex items-center gap-2">
                   <button
                     onClick={() => setIsCompanyDropdownOpen(!isCompanyDropdownOpen)}
                     className="flex items-center gap-1.5 text-base font-bold text-slate-800 focus:outline-none hover:text-slate-600 transition-colors cursor-pointer"
                   >
                     <span>{companies.find(c => c.id === selectedCompanyId)?.name || "Select Business"}</span>
                     <ChevronDown size={15} className={`text-slate-500 transition-transform duration-250 ${isCompanyDropdownOpen ? "rotate-180" : ""}`} />
+                  </button>
+                  <button
+                    onClick={() => {
+                      const activeComp = companies.find(c => c.id === selectedCompanyId);
+                      if (activeComp) {
+                        setEditingCompany(activeComp);
+                        setCompanyNameInput(activeComp.name);
+                        setIsCompanyModalOpen(true);
+                      }
+                    }}
+                    className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                    title="Rename Active Business"
+                  >
+                    <Edit3 size={14} />
                   </button>
 
                   <AnimatePresence>
@@ -744,10 +831,10 @@ export default function Home() {
           </div>
 
           {/* Top Tab Selection Header Bar with Out-Of-Box Sliding Pill Animation */}
-          <div className="flex bg-slate-200/60 p-1 rounded-xl max-w-md w-full relative">
+          <div className="flex gap-1.5 bg-slate-200/60 p-1 rounded-xl max-w-xl w-full relative">
             <button
               onClick={() => setActiveTab("ledger")}
-              className={`flex-1 py-2 text-xs uppercase font-bold tracking-wider rounded-lg transition-colors duration-200 relative cursor-pointer ${
+              className={`flex-1 py-2 px-2 text-xs uppercase font-bold tracking-wider rounded-lg transition-colors duration-200 relative cursor-pointer ${
                 activeTab === "ledger" ? "text-white" : "text-slate-500 hover:text-slate-700"
               }`}
             >
@@ -758,12 +845,12 @@ export default function Home() {
                   transition={{ type: "spring", stiffness: 380, damping: 30 }}
                 />
               )}
-              <span className="relative z-10">Transaction Ledger</span>
+              <span className="relative z-10 truncate block">Ledger</span>
             </button>
             
             <button
               onClick={() => setActiveTab("analytics")}
-              className={`flex-1 py-2 text-xs uppercase font-bold tracking-wider rounded-lg transition-colors duration-200 relative cursor-pointer ${
+              className={`flex-1 py-2 px-2 text-xs uppercase font-bold tracking-wider rounded-lg transition-colors duration-200 relative cursor-pointer ${
                 activeTab === "analytics" ? "text-white" : "text-slate-500 hover:text-slate-700"
               }`}
             >
@@ -774,7 +861,23 @@ export default function Home() {
                   transition={{ type: "spring", stiffness: 380, damping: 30 }}
                 />
               )}
-              <span className="relative z-10">AI Analytics & Alerts</span>
+              <span className="relative z-10 truncate block">AI Insights</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("bookkeeping")}
+              className={`flex-1 py-2 px-2 text-xs uppercase font-bold tracking-wider rounded-lg transition-colors duration-200 relative cursor-pointer ${
+                activeTab === "bookkeeping" ? "text-white" : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              {activeTab === "bookkeeping" && (
+                <motion.div
+                  layoutId="activeTabBackground"
+                  className="absolute inset-0 bg-slate-900 rounded-lg shadow-sm"
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                />
+              )}
+              <span className="relative z-10 truncate block">Book Keeping</span>
             </button>
           </div>
 
@@ -803,7 +906,7 @@ export default function Home() {
                     onDelete={handleDeleteExpense}
                   />
                 </motion.div>
-              ) : (
+              ) : activeTab === "analytics" ? (
                 <motion.div
                   key="analytics"
                   initial={{ opacity: 0, y: 10 }}
@@ -834,6 +937,23 @@ export default function Home() {
                       />
                     </div>
                   </div>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="bookkeeping"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.25 }}
+                  className="space-y-8"
+                >
+                  <Bookkeeping
+                    items={activeBookkeepings}
+                    onAdd={handleAddBookkeeping}
+                    onUpdate={handleUpdateBookkeeping}
+                    onDelete={handleDeleteBookkeeping}
+                    activeCompanyName={companies.find(c => c.id === selectedCompanyId)?.name || "Active Entity"}
+                  />
                 </motion.div>
               )}
             </AnimatePresence>
