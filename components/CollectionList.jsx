@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Edit3, Trash2, Search, X, Check, IndianRupee, Calendar, Tag, FileText } from "lucide-react";
+import { Plus, Edit3, Trash2, Search, X, Check, IndianRupee, Calendar, Tag, FileText, Bell } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import ReceiptModal from "./ReceiptModal";
 
@@ -176,12 +176,66 @@ export default function CollectionList({
   items = [], 
   onAdd, 
   onUpdate, 
-  onDelete 
+  onDelete,
+  onAddReminder
 }) {
   const [search, setSearch] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [activeReceiptItem, setActiveReceiptItem] = useState(null);
+
+  // Collection reminder form states
+  const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
+  const [reminderItem, setReminderItem] = useState(null);
+  const [reminderTime, setReminderTime] = useState("");
+  const [reminderDate, setReminderDate] = useState(new Date().toISOString().split("T")[0]);
+  const [reminderTone, setReminderTone] = useState("chime");
+  const [reminderFrequency, setReminderFrequency] = useState("daily");
+  const [reminderError, setReminderError] = useState("");
+
+  const handleOpenReminderModal = (item) => {
+    setReminderItem(item);
+    setReminderTime("");
+    setReminderDate(new Date().toISOString().split("T")[0]);
+    setReminderTone("chime");
+    setReminderFrequency("daily");
+    setReminderError("");
+    setIsReminderModalOpen(true);
+  };
+
+  const handleCloseReminderModal = () => {
+    setIsReminderModalOpen(false);
+    setReminderItem(null);
+    setReminderError("");
+  };
+
+  const handleReminderSubmit = (e) => {
+    e.preventDefault();
+    if (!reminderTime) {
+      setReminderError("Please select a time.");
+      return;
+    }
+    if (reminderFrequency === "once" && !reminderDate) {
+      setReminderError("Please select a date.");
+      return;
+    }
+
+    const payload = {
+      description: `Collect: ${reminderItem.description} - ₹${Number(reminderItem.amount).toLocaleString("en-IN")}`,
+      date: reminderFrequency === "daily" ? "" : reminderDate,
+      time: reminderTime,
+      tone: reminderTone,
+      frequency: reminderFrequency,
+      fired: false,
+      lastFiredDate: null,
+      collectionId: reminderItem.id
+    };
+
+    if (onAddReminder) {
+      onAddReminder(payload);
+    }
+    handleCloseReminderModal();
+  };
   
   // Form state
   const [formData, setFormData] = useState({
@@ -400,6 +454,17 @@ export default function CollectionList({
                         </svg>
                       </button>
                       
+                      {item.status?.toLowerCase() !== "received" && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenReminderModal(item)}
+                          className="p-1 rounded text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
+                          title="Schedule Alert Reminder"
+                        >
+                          <Bell size={13} />
+                        </button>
+                      )}
+                      
                       <button
                         onClick={() => handleOpenEdit(item)}
                         className="p-1 rounded text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-colors"
@@ -596,6 +661,130 @@ export default function CollectionList({
             item={activeReceiptItem}
             type="collection"
           />
+        )}
+      </AnimatePresence>
+
+      {/* Reminder Scheduling Modal */}
+      <AnimatePresence>
+        {isReminderModalOpen && reminderItem && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 backdrop-blur-sm p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-sm bg-white border border-slate-100 rounded-xl overflow-hidden shadow-xl"
+            >
+              {/* Header */}
+              <div className="flex justify-between items-center px-5 py-4 border-b border-slate-100 bg-slate-50/50">
+                <div className="flex items-center gap-2">
+                  <Bell size={15} className="text-indigo-500 animate-pulse animate-duration-1000" />
+                  <h4 className="font-semibold text-sm text-slate-800">
+                    Schedule Collection Reminder
+                  </h4>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCloseReminderModal}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Form Body */}
+              <form onSubmit={handleReminderSubmit} className="p-5 space-y-4">
+                {reminderError && (
+                  <div className="p-2.5 rounded bg-red-50 border border-red-100 text-red-700 text-xs font-medium">
+                    {reminderError}
+                  </div>
+                )}
+
+                <div className="p-2.5 bg-slate-50 border border-slate-150 rounded-lg text-xs text-slate-700 font-semibold space-y-0.5">
+                  <p className="text-[10px] uppercase font-bold text-slate-400">Target Collection</p>
+                  <p className="truncate text-slate-800 font-bold">{reminderItem.description}</p>
+                  <p className="text-slate-500 font-medium">Amount: ₹{Number(reminderItem.amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</p>
+                </div>
+
+                {/* Frequency Select */}
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Alert Frequency</label>
+                  <select
+                    value={reminderFrequency}
+                    onChange={(e) => setReminderFrequency(e.target.value)}
+                    className="w-full border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-slate-500 text-slate-700 bg-white"
+                  >
+                    <option value="daily">🔄 Daily Recurring Reminder</option>
+                    <option value="once">📅 One-Time Reminder</option>
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Time Picker */}
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Time</label>
+                    <input
+                      type="time"
+                      value={reminderTime}
+                      onChange={(e) => setReminderTime(e.target.value)}
+                      className="w-full border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-slate-500 text-slate-700"
+                    />
+                  </div>
+
+                  {/* Tone Select */}
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Alarm Tone</label>
+                    <select
+                      value={reminderTone}
+                      onChange={(e) => setReminderTone(e.target.value)}
+                      className="w-full border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-slate-500 text-slate-700 bg-white"
+                    >
+                      <option value="chime">🔔 Classic Chime</option>
+                      <option value="beep">🚨 Double Beep</option>
+                      <option value="digital">⏰ Digital Alarm</option>
+                      <option value="retro">👾 Retro Game</option>
+                      <option value="ascending">📈 Sweep Up</option>
+                      <option value="zen">🧘 Zen Bowl</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Date Picker (only if frequency is once) */}
+                {reminderFrequency === "once" && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                  >
+                    <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Start Date</label>
+                    <input
+                      type="date"
+                      value={reminderDate}
+                      onChange={(e) => setReminderDate(e.target.value)}
+                      className="w-full border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-slate-500 text-slate-700"
+                    />
+                  </motion.div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={handleCloseReminderModal}
+                    className="flex-1 py-2 text-xs border border-slate-200 hover:bg-slate-50 text-slate-500 font-semibold rounded-lg transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2 text-xs bg-slate-900 text-white font-semibold rounded-lg hover:bg-slate-800 transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    <Check size={13} />
+                    <span>Set Reminder</span>
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

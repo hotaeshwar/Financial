@@ -57,7 +57,10 @@ export default function Home() {
   // Alarm & Reminders states
   const [reminders, setReminders] = useState([]);
   const [activeAlarm, setActiveAlarm] = useState(null);
+  const [isAutoAlarmMuted, setIsAutoAlarmMuted] = useState(false);
+  const [isAutoBannerDismissed, setIsAutoBannerDismissed] = useState(false);
   const alarmIntervalRef = useRef(null);
+  const autoAlarmIntervalRef = useRef(null);
 
   // Weather & Greeting states
   const [greeting, setGreeting] = useState("Hello");
@@ -65,6 +68,18 @@ export default function Home() {
     city: "",
     temp: null,
     code: null
+  });
+
+  // --- FILTERED COLLECTIONS & EXPENSES BY ACTIVE COMPANY ---
+  const activeCollections = collections.filter(c => c.companyId === selectedCompanyId);
+  const activeExpenses = expenses.filter(e => e.companyId === selectedCompanyId);
+  const activeBookkeepings = bookkeepings.filter(b => b.companyId === selectedCompanyId);
+
+  // Scan for collections due today or overdue
+  const todayStr = new Date().toISOString().split("T")[0];
+  const dueCollections = activeCollections.filter(col => {
+    const isPending = col.status?.toLowerCase() === "pending" || col.status?.toLowerCase() === "partial payment";
+    return isPending && col.date <= todayStr;
   });
 
   // Sync clock every second
@@ -253,6 +268,47 @@ export default function Home() {
             osc2.stop(ctx.currentTime + 0.15);
           } catch (e) {}
         }, 250);
+      } else if (toneType === "digital") {
+        // Digital Alarm (rapid high-pitched beeps)
+        const playBeep = (delay) => {
+          setTimeout(() => {
+            try {
+              const osc = ctx.createOscillator();
+              const beepGain = ctx.createGain();
+              beepGain.connect(ctx.destination);
+              osc.type = "square";
+              osc.frequency.setValueAtTime(2048, ctx.currentTime);
+              beepGain.gain.setValueAtTime(0.12, ctx.currentTime);
+              beepGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+              osc.connect(beepGain);
+              osc.start();
+              osc.stop(ctx.currentTime + 0.1);
+            } catch (e) {}
+          }, delay);
+        };
+        playBeep(0);
+        playBeep(200);
+        playBeep(400);
+      } else if (toneType === "zen") {
+        // Zen Bowl (low frequency deep wave with a high harmonic overtone)
+        const osc1 = ctx.createOscillator();
+        const osc2 = ctx.createOscillator();
+        
+        osc1.type = "sine";
+        osc1.frequency.setValueAtTime(160, ctx.currentTime);
+        
+        osc2.type = "sine";
+        osc2.frequency.setValueAtTime(320, ctx.currentTime);
+        
+        gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.2);
+        
+        osc1.connect(gainNode);
+        osc2.connect(gainNode);
+        osc1.start();
+        osc2.start();
+        osc1.stop(ctx.currentTime + 1.2);
+        osc2.stop(ctx.currentTime + 1.2);
       } else if (toneType === "retro") {
         // Retro warble
         const osc = ctx.createOscillator();
@@ -335,6 +391,31 @@ export default function Home() {
     };
   }, [activeAlarm]);
 
+  // Loop warning sound automatically when there are due collections and not muted
+  useEffect(() => {
+    if (dueCollections.length > 0 && !isAutoAlarmMuted && !isAutoBannerDismissed) {
+      // Play immediately
+      playToneSound("beep");
+      
+      // Repeat alert sound every 3 seconds
+      autoAlarmIntervalRef.current = setInterval(() => {
+        playToneSound("beep");
+      }, 3000);
+    } else {
+      if (autoAlarmIntervalRef.current) {
+        clearInterval(autoAlarmIntervalRef.current);
+        autoAlarmIntervalRef.current = null;
+      }
+    }
+
+    return () => {
+      if (autoAlarmIntervalRef.current) {
+        clearInterval(autoAlarmIntervalRef.current);
+        autoAlarmIntervalRef.current = null;
+      }
+    };
+  }, [dueCollections.length, isAutoAlarmMuted, isAutoBannerDismissed]);
+
   // Poll for scheduled reminders
   useEffect(() => {
     const reminderChecker = setInterval(() => {
@@ -346,10 +427,17 @@ export default function Home() {
 
       let didFired = false;
       const updated = reminders.map(rem => {
-        if (!rem.fired && rem.date === dateStr && rem.time === timeStr) {
+        const isOnceMatch = (!rem.frequency || rem.frequency === "once") && !rem.fired && rem.date === dateStr && rem.time === timeStr;
+        const isDailyMatch = rem.frequency === "daily" && rem.lastFiredDate !== dateStr && rem.time === timeStr;
+
+        if (isOnceMatch || isDailyMatch) {
           setActiveAlarm(rem);
           didFired = true;
-          return { ...rem, fired: true };
+          return { 
+            ...rem, 
+            fired: true, 
+            lastFiredDate: dateStr 
+          };
         }
         return rem;
       });
@@ -593,10 +681,7 @@ export default function Home() {
     }
   };
 
-  // --- FILTERED COLLECTIONS & EXPENSES BY ACTIVE COMPANY ---
-  const activeCollections = collections.filter(c => c.companyId === selectedCompanyId);
-  const activeExpenses = expenses.filter(e => e.companyId === selectedCompanyId);
-  const activeBookkeepings = bookkeepings.filter(b => b.companyId === selectedCompanyId);
+
 
   // --- SUMMARY CALCULATIONS ---
   const totalCollectionsValue = activeCollections.reduce((sum, i) => sum + Number(i.amount || 0), 0);
@@ -656,6 +741,100 @@ export default function Home() {
         </div>
 
       </header>
+
+      {/* Auto-Reminder Banner for Due/Overdue Collections */}
+      <div className="max-w-7xl mx-auto">
+        <AnimatePresence>
+          {dueCollections.length > 0 && !isAutoBannerDismissed && (
+            <motion.div
+              initial={{ opacity: 0, y: -15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              className="mb-6 bg-gradient-to-r from-amber-50/90 to-red-55/90 border border-red-200 shadow-sm rounded-2xl p-4.5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 backdrop-blur-sm"
+            >
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-red-100 text-red-600 flex items-center justify-center shrink-0 border border-red-200 animate-pulse">
+                  <AlertTriangle size={20} />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-slate-800 flex flex-wrap items-center gap-2">
+                    <span>Auto-Reminder: Overdue Collections Alert</span>
+                    <span className="bg-red-100 text-red-700 border border-red-200 text-[10px] font-extrabold px-2 py-0.5 rounded-full animate-pulse">
+                      {dueCollections.length} Due
+                    </span>
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                    The following collections are due or overdue. Please collect them to avoid delays.
+                  </p>
+                  
+                  {/* Quick-list of due collections */}
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {dueCollections.slice(0, 3).map(col => (
+                      <div key={col.id} className="flex items-center gap-2 bg-white border border-red-100/50 rounded-lg px-2.5 py-1 text-xs shadow-xs">
+                        <span className="font-semibold text-slate-700 truncate max-w-[150px]">{col.description}</span>
+                        <span className="text-slate-300 font-light">|</span>
+                        <span className="font-bold text-red-600">₹{Number(col.amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                        <button
+                          onClick={async () => {
+                            await handleUpdateCollection(col.id, { ...col, status: "Received" });
+                          }}
+                          className="ml-1 text-[9px] bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/50 font-bold px-1.5 py-0.5 rounded transition-colors cursor-pointer"
+                        >
+                          Receive
+                        </button>
+                      </div>
+                    ))}
+                    {dueCollections.length > 3 && (
+                      <div className="flex items-center bg-slate-100 border border-slate-200 rounded-lg px-2.5 py-1 text-[10px] text-slate-500 font-bold">
+                        +{dueCollections.length - 3} more
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-row items-center gap-2 w-full md:w-auto shrink-0 border-t md:border-t-0 border-slate-200/60 pt-3 md:pt-0 justify-end">
+                {/* Alarm Sound Controller */}
+                {!isAutoAlarmMuted ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsAutoAlarmMuted(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 border border-red-200 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                    title="Mute Warning Alarm"
+                  >
+                    <WifiOff size={13} className="animate-bounce" />
+                    <span>Mute Alarm</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsAutoAlarmMuted(false)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                    title="Unmute Warning Alarm"
+                  >
+                    <ClockIcon size={13} />
+                    <span>Play Sound</span>
+                  </button>
+                )}
+                
+                {/* Dismiss Banner Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAutoBannerDismissed(true);
+                    setIsAutoAlarmMuted(true);
+                  }}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-600 border border-slate-250 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                  title="Dismiss warning"
+                >
+                  <X size={13} />
+                  <span>Dismiss</span>
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
       {loading ? (
         /* Loading Spinner */
@@ -898,6 +1077,7 @@ export default function Home() {
                     onAdd={handleAddCollection}
                     onUpdate={handleUpdateCollection}
                     onDelete={handleDeleteCollection}
+                    onAddReminder={handleAddReminder}
                   />
                   <FixedExpenses
                     items={activeExpenses}
@@ -964,35 +1144,92 @@ export default function Home() {
 
       {/* Alarm Reminder Popups Overlay */}
       <AnimatePresence>
-        {activeAlarm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="w-full max-w-sm bg-white border border-slate-100 rounded-xl overflow-hidden shadow-2xl p-6 text-center space-y-4"
-            >
-              <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto animate-bounce">
-                <ClockIcon size={24} />
-              </div>
-              <div className="space-y-1">
-                <h4 className="font-bold text-slate-800 text-sm">BiD Alarm Triggered</h4>
-                <p className="text-xs text-slate-400">Scheduled task time is due!</p>
-              </div>
-              <div className="p-3 bg-slate-50 border border-slate-100 rounded-lg text-slate-700 text-xs font-semibold leading-relaxed">
-                {activeAlarm.description}
-              </div>
-              <button
-                onClick={() => {
-                  setActiveAlarm(null);
-                }}
-                className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs rounded-lg transition-colors cursor-pointer"
+        {activeAlarm && (() => {
+          const linkedCol = activeAlarm.collectionId 
+            ? collections.find(c => c.id === activeAlarm.collectionId) 
+            : null;
+          
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="w-full max-w-sm bg-white border border-slate-100 rounded-xl overflow-hidden shadow-2xl p-6 text-center space-y-4"
               >
-                Dismiss Alarm
-              </button>
-            </motion.div>
-          </div>
-        )}
+                <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto animate-bounce">
+                  <ClockIcon size={24} />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="font-bold text-slate-800 text-sm">
+                    {activeAlarm.frequency === "daily" ? "Daily Collection Alert" : "Alarm Reminder Triggered"}
+                  </h4>
+                  <p className="text-xs text-slate-400">
+                    {activeAlarm.frequency === "daily" ? "Recurring daily alert" : "Scheduled task time is due!"}
+                  </p>
+                </div>
+                <div className="p-3 bg-slate-50 border border-slate-100 rounded-lg text-slate-700 text-xs font-semibold leading-relaxed">
+                  {activeAlarm.description}
+                </div>
+
+                {linkedCol && (
+                  <div className="p-3 bg-indigo-50/50 border border-indigo-100 rounded-lg text-left text-xs space-y-1.5">
+                    <p className="font-bold text-indigo-950 uppercase text-[9px] tracking-wider">Linked Collection Details</p>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Amount:</span>
+                      <span className="font-semibold text-slate-800">₹{Number(linkedCol.amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Status:</span>
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
+                        linkedCol.status?.toLowerCase() === "received"
+                          ? "bg-emerald-100 text-emerald-800"
+                          : "bg-amber-100 text-amber-800"
+                      }`}>
+                        {linkedCol.status}
+                      </span>
+                    </div>
+                    
+                    {linkedCol.status?.toLowerCase() !== "received" && (
+                      <button
+                        onClick={async () => {
+                          await handleUpdateCollection(linkedCol.id, {
+                            ...linkedCol,
+                            status: "Received"
+                          });
+                          setActiveAlarm(null);
+                        }}
+                        className="w-full mt-2 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-[11px] rounded-lg transition-colors cursor-pointer text-center block shadow-sm"
+                      >
+                        Mark Collection as Received
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex flex-col gap-2 pt-2">
+                  <button
+                    onClick={() => {
+                      setActiveAlarm(null);
+                    }}
+                    className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs rounded-lg transition-colors cursor-pointer shadow-sm"
+                  >
+                    Dismiss Alarm
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleDeleteReminder(activeAlarm.id);
+                      setActiveAlarm(null);
+                    }}
+                    className="w-full py-1.5 text-xs text-red-500 hover:text-red-700 font-medium hover:bg-red-50 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-red-100"
+                  >
+                    Cancel / Turn Off Schedule
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          );
+        })()}
       </AnimatePresence>
 
       {/* Company Modal */}
