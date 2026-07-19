@@ -757,27 +757,23 @@ export default function Home() {
         
         {/* Left branding */}
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <img 
-              src="/bid.png" 
-              alt="BiD Logo" 
-              className="w-12 h-12 object-contain shadow-sm rounded-lg bg-white p-1 shrink-0" 
-            />
-            <span className="text-2xl font-black tracking-tight text-slate-900">
-              BiD
-            </span>
-          </div>
-          <div className="h-6 w-[1px] bg-slate-200 mx-1 hidden sm:block" />
+          <img 
+            src="/bid.png" 
+            alt="BiD Logo" 
+            className="w-12 h-12 object-contain shadow-sm rounded-lg bg-white p-1 shrink-0" 
+          />
           <div>
             <h1 className="text-xl md:text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
               <span>{greeting}!</span>
             </h1>
-            <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-400 mt-0.5">
-              <span>BiD Finance Monitor Dashboard</span>
+            <div className="flex flex-wrap items-center gap-1.5 text-xs mt-0.5">
+              <span className="font-semibold text-slate-600">
+                BiD Finance Monitor Dashboard
+              </span>
               {isMounted && weather.temp !== null && (
                 <>
-                  <span className="text-slate-350">•</span>
-                  <span className="flex items-center gap-1 text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200/50 font-semibold text-[10px]">
+                  <span className="text-slate-300">•</span>
+                  <span className="flex items-center gap-1 text-slate-605 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200/50 font-semibold text-[10px]">
                     {getWeatherIcon(weather.code)}
                     <span>{weather.city ? `${weather.city.toUpperCase()} • ` : ""}{weather.temp}°C</span>
                   </span>
