@@ -109,6 +109,11 @@ export default function Home() {
       const now = new Date();
       setCurrentTime(now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit" }));
       setCurrentDate(now.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric" }));
+      
+      const hrs = now.getHours();
+      if (hrs < 12) setGreeting("Good morning");
+      else if (hrs < 17) setGreeting("Good afternoon");
+      else setGreeting("Good evening");
     };
     tickTime();
     const timer = setInterval(tickTime, 1000);
@@ -753,7 +758,10 @@ export default function Home() {
     <div className="min-h-screen bg-slate-50/50 p-6 md:p-10 relative" suppressHydrationWarning>
       
       {/* Top Banner Header with logo & live clock */}
-      <header className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-200 pb-3 mb-6 gap-3">
+      <header 
+        suppressHydrationWarning={true}
+        className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-200 pb-3 mb-6 gap-3"
+      >
         
         {/* Left branding */}
         <div className="flex items-center gap-3">
