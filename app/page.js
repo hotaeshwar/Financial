@@ -753,20 +753,26 @@ export default function Home() {
     <div className="min-h-screen bg-slate-50/50 p-6 md:p-10 relative" suppressHydrationWarning>
       
       {/* Top Banner Header with logo & live clock */}
-      <header className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-200 pb-5 mb-8 gap-4">
+      <header className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-200 pb-3 mb-6 gap-3">
         
         {/* Left branding */}
-        <div className="flex items-center gap-4">
-          <img 
-            src="/bid.png" 
-            alt="BiD Logo" 
-            className="w-36 h-36 object-contain shadow-sm rounded-lg bg-white p-1.5" 
-          />
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <img 
+              src="/bid.png" 
+              alt="BiD Logo" 
+              className="w-12 h-12 object-contain shadow-sm rounded-lg bg-white p-1 shrink-0" 
+            />
+            <span className="text-2xl font-black tracking-tight text-slate-900">
+              BiD
+            </span>
+          </div>
+          <div className="h-6 w-[1px] bg-slate-200 mx-1 hidden sm:block" />
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
+            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
               <span>{greeting}!</span>
             </h1>
-            <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-400 mt-1">
+            <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-400 mt-0.5">
               <span>BiD Finance Monitor Dashboard</span>
               {isMounted && weather.temp !== null && (
                 <>
