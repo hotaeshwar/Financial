@@ -50,6 +50,8 @@ export default function Home() {
   const [companyNameInput, setCompanyNameInput] = useState("");
   const [isDueModalOpen, setIsDueModalOpen] = useState(false);
   const [activeLedgerTab, setActiveLedgerTab] = useState("collections"); // "collections" or "expenses"
+  const [showSplash, setShowSplash] = useState(true);
+  const [progress, setProgress] = useState(0);
 
   const [isMounted, setIsMounted] = useState(false);
 
@@ -111,6 +113,28 @@ export default function Home() {
     tickTime();
     const timer = setInterval(tickTime, 1000);
     return () => clearInterval(timer);
+  }, []);
+
+  // Splash screen loading progress and duration timer
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowSplash(false);
+    }, 3000);
+
+    const interval = setInterval(() => {
+      setProgress(prev => {
+        if (prev >= 100) {
+          clearInterval(interval);
+          return 100;
+        }
+        return prev + 1;
+      });
+    }, 25);
+
+    return () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+    };
   }, []);
 
   // Fetch initial ledger values
@@ -736,7 +760,7 @@ export default function Home() {
           <img 
             src="/bid.png" 
             alt="BiD Logo" 
-            className="w-20 h-20 object-contain shadow-sm rounded-lg bg-white p-1" 
+            className="w-36 h-36 object-contain shadow-sm rounded-lg bg-white p-1.5" 
           />
           <div>
             <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
@@ -1521,6 +1545,47 @@ export default function Home() {
           ))}
         </AnimatePresence>
       </div>
+
+      {/* Splash Screen Overlay */}
+      <AnimatePresence>
+        {showSplash && (
+          <motion.div
+            key="splash-screen"
+            initial={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5, ease: "easeInOut" }}
+            className="fixed inset-0 z-50 bg-gradient-to-tr from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center"
+          >
+            {/* Spinning glowing buffer ring surrounding the breathing logo */}
+            <div className="relative flex items-center justify-center">
+              {/* Outer glowing border spinner */}
+              <div className="w-48 h-48 rounded-full border-4 border-transparent border-t-emerald-500 border-r-indigo-500 border-b-rose-500 border-l-amber-500 animate-spin absolute shadow-[0_0_20px_rgba(99,102,241,0.3)]" />
+              
+              {/* Logo in center (80% bigger than w-20 is w-36) */}
+              <motion.img
+                src="/bid.png"
+                alt="BiD Logo"
+                className="w-36 h-36 object-contain rounded-full bg-white p-2 shadow-2xl relative z-10"
+                animate={{ scale: [1, 1.05, 1] }}
+                transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+              />
+            </div>
+
+            {/* Filling loading bar */}
+            <div className="w-56 h-1.5 bg-slate-800 rounded-full overflow-hidden mt-8 shadow-inner">
+              <div 
+                className="h-full bg-gradient-to-r from-emerald-500 via-indigo-500 to-rose-500 transition-all duration-75 ease-out rounded-full shadow-[0_0_8px_rgba(99,102,241,0.5)]"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+
+            {/* Loading text */}
+            <p className="text-[10px] uppercase font-bold tracking-widest text-slate-500 mt-3 animate-pulse">
+              Initializing BiD Finance Dashboard... {progress}%
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
   );
