@@ -406,84 +406,104 @@ export default function CollectionList({
       <div className="overflow-x-auto custom-scrollbar max-h-[400px]">
         <table className="w-full text-left border-collapse">
           <thead className="sticky top-0 bg-white z-10">
-            <tr className="border-b border-slate-100 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-              <th className="py-2.5">Description</th>
-              <th className="py-2.5 text-right">Amount</th>
-              <th className="py-2.5 text-center">Date</th>
-              <th className="py-2.5 text-center">Status</th>
-              <th className="py-2.5 text-right">Actions</th>
+            <tr className="border-b border-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              <th className="px-4 py-2.5 text-left">Description</th>
+              <th className="px-4 py-2.5 text-right">Total Amount</th>
+              <th className="px-4 py-2.5 text-right">Received</th>
+              <th className="px-4 py-2.5 text-right">Due</th>
+              <th className="px-4 py-2.5 text-center">Date</th>
+              <th className="px-4 py-2.5 text-center">Status</th>
+              <th className="px-4 py-2.5 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-xs">
             {filteredItems.length > 0 ? (
-              filteredItems.map((item) => (
-                <tr key={item.id} className="hover:bg-slate-50/50 transition-colors group">
-                  <td className="py-3 font-medium text-slate-800 max-w-[150px] truncate">{item.description}</td>
-                  <td className="py-3 font-semibold text-slate-700 text-right">
-                    <div>₹{Number(item.amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</div>
-                    {item.status?.toLowerCase() === "partial payment" && (
-                      <div className="text-[10px] text-slate-400 font-normal">
-                        Paid: ₹{Number(item.paidAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })} | Due: ₹{Number((item.amount || 0) - (item.paidAmount || 0)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                      </div>
-                    )}
-                  </td>
-                  <td className="py-3 text-slate-400 text-center whitespace-nowrap">{item.date}</td>
-                  <td className="py-3 text-center">
-                    <span className={`inline-block border px-2 py-0.5 rounded text-[10px] font-medium tracking-wide ${
-                      item.status?.toLowerCase() === "received"
-                        ? "bg-emerald-50 border-emerald-200/50 text-emerald-700"
-                        : item.status?.toLowerCase() === "partial payment"
-                        ? "bg-indigo-50 border-indigo-200/50 text-indigo-700"
-                        : item.status?.toLowerCase() === "pending"
-                        ? "bg-amber-50 border-amber-200/50 text-amber-700"
-                        : "bg-slate-50 border-slate-200/50 text-slate-700"
-                    }`}>
-                      {item.status}
-                    </span>
-                  </td>
-                  <td className="py-3 text-right">
-                    <div className="flex justify-end items-center gap-1.5 opacity-60 group-hover:opacity-100 transition-opacity">
-                      <button
-                        type="button"
-                        onClick={() => handleShareWhatsApp(item)}
-                        className="p-1 rounded text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer"
-                        title="Share details on WhatsApp"
-                      >
-                        <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
-                          <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.455L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.625 1.451 5.489 0 9.954-4.464 9.957-9.956.002-2.661-1.034-5.163-2.916-7.047C16.435 1.758 13.93 .717 11.272.717 5.783.717 1.317 5.183 1.315 10.676c-.001 1.705.446 3.371 1.294 4.841l-.974 3.556 3.64-.954zm10.743-5.385c-.29-.145-1.716-.848-1.982-.945-.267-.097-.461-.145-.655.145-.194.29-.752.945-.921 1.139-.17.194-.339.218-.629.073-.29-.145-1.226-.452-2.336-1.441-.864-.77-1.448-1.721-1.618-2.012-.17-.29-.018-.447.127-.591.13-.13.29-.339.436-.509.145-.17.194-.291.291-.485.097-.194.049-.364-.024-.509-.073-.145-.655-1.577-.897-2.158-.236-.569-.475-.491-.655-.5-.17-.008-.364-.01-.558-.01-.194 0-.509.073-.776.364-.267.29-1.02 1.02-1.02 2.487 0 1.467 1.067 2.885 1.213 3.079.145.194 2.1 3.206 5.089 4.495.71.307 1.265.49 1.697.628.713.227 1.36.195 1.872.119.571-.085 1.716-.703 1.958-1.382.242-.679.242-1.261.17-1.382-.073-.12-.267-.194-.558-.339z"/>
-                        </svg>
-                      </button>
-                      
-                      {item.status?.toLowerCase() !== "received" && (
+              filteredItems.map((item) => {
+                const isPartial = item.status?.toLowerCase() === "partial payment";
+                const isReceived = item.status?.toLowerCase() === "received";
+                
+                const totalAmt = Number(item.amount || 0);
+                const receivedAmt = isReceived 
+                  ? totalAmt 
+                  : isPartial 
+                  ? Number(item.paidAmount || 0) 
+                  : 0;
+                const dueAmt = isReceived 
+                  ? 0 
+                  : isPartial 
+                  ? totalAmt - receivedAmt 
+                  : totalAmt;
+
+                return (
+                  <tr key={item.id} className="hover:bg-slate-50/50 transition-colors group">
+                    <td className="px-4 py-3 font-medium text-slate-800 max-w-[150px] truncate">{item.description}</td>
+                    <td className="px-4 py-3 font-semibold text-slate-700 text-right">
+                      ₹{totalAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="px-4 py-3 font-medium text-emerald-600 text-right">
+                      ₹{receivedAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className={`px-4 py-3 font-semibold text-right ${dueAmt > 0 ? "text-red-500" : "text-slate-450 font-normal"}`}>
+                      ₹{dueAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="px-4 py-3 text-slate-400 text-center whitespace-nowrap">{item.date}</td>
+                    <td className="px-4 py-3 text-center whitespace-nowrap">
+                      <span className={`inline-block border px-2 py-0.5 rounded text-[10px] font-semibold tracking-wide whitespace-nowrap ${
+                        item.status?.toLowerCase() === "received"
+                          ? "bg-emerald-50 border-emerald-200/50 text-emerald-700"
+                          : item.status?.toLowerCase() === "partial payment"
+                          ? "bg-indigo-50 border-indigo-200/50 text-indigo-700"
+                          : item.status?.toLowerCase() === "pending"
+                          ? "bg-amber-50 border-amber-200/50 text-amber-700"
+                          : "bg-slate-50 border-slate-200/50 text-slate-700"
+                      }`}>
+                        {item.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex justify-end items-center gap-1.5 opacity-60 group-hover:opacity-100 transition-opacity">
                         <button
                           type="button"
-                          onClick={() => handleOpenReminderModal(item)}
-                          className="p-1 rounded text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
-                          title="Schedule Alert Reminder"
+                          onClick={() => handleShareWhatsApp(item)}
+                          className="p-1 rounded text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer"
+                          title="Share details on WhatsApp"
                         >
-                          <Bell size={13} />
+                          <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                            <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.455L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.625 1.451 5.489 0 9.954-4.464 9.957-9.956.002-2.661-1.034-5.163-2.916-7.047C16.435 1.758 13.93 .717 11.272.717 5.783.717 1.317 5.183 1.315 10.676c-.001 1.705.446 3.371 1.294 4.841l-.974 3.556 3.64-.954zm10.743-5.385c-.29-.145-1.716-.848-1.982-.945-.267-.097-.461-.145-.655.145-.194.29-.752.945-.921 1.139-.17.194-.339.218-.629.073-.29-.145-1.226-.452-2.336-1.441-.864-.77-1.448-1.721-1.618-2.012-.17-.29-.018-.447.127-.591.13-.13.29-.339.436-.509.145-.17.194-.291.291-.485.097-.194.049-.364-.024-.509-.073-.145-.655-1.577-.897-2.158-.236-.569-.475-.491-.655-.5-.17-.008-.364-.01-.558-.01-.194 0-.509.073-.776.364-.267.29-1.02 1.02-1.02 2.487 0 1.467 1.067 2.885 1.213 3.079.145.194 2.1 3.206 5.089 4.495.71.307 1.265.49 1.697.628.713.227 1.36.195 1.872.119.571-.085 1.716-.703 1.958-1.382.242-.679.242-1.261.17-1.382-.073-.12-.267-.194-.558-.339z"/>
+                          </svg>
                         </button>
-                      )}
-                      
-                      <button
-                        onClick={() => handleOpenEdit(item)}
-                        className="p-1 rounded text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-colors"
-                      >
-                        <Edit3 size={13} />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteClick(item)}
-                        className="p-1 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
+                        
+                        {item.status?.toLowerCase() !== "received" && (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenReminderModal(item)}
+                            className="p-1 rounded text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
+                            title="Schedule Alert Reminder"
+                          >
+                            <Bell size={13} />
+                          </button>
+                        )}
+                        
+                        <button
+                          onClick={() => handleOpenEdit(item)}
+                          className="p-1 rounded text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-colors"
+                        >
+                          <Edit3 size={13} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteClick(item)}
+                          className="p-1 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
             ) : (
               <tr>
-                <td colSpan="5" className="py-8 text-center text-slate-400 font-light">
+                <td colSpan="7" className="py-8 text-center text-slate-400 font-light">
                   {search ? "No matches found" : "No records to display"}
                 </td>
               </tr>

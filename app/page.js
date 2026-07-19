@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   TrendingUp, 
@@ -23,7 +23,8 @@ import {
   ChevronDown,
   Plus,
   Trash2,
-  Edit3
+  Edit3,
+  Calendar
 } from "lucide-react";
 import CollectionList from "@/components/CollectionList";
 import FixedExpenses from "@/components/FixedExpenses";
@@ -47,6 +48,8 @@ export default function Home() {
   const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
   const [editingCompany, setEditingCompany] = useState(null);
   const [companyNameInput, setCompanyNameInput] = useState("");
+  const [isDueModalOpen, setIsDueModalOpen] = useState(false);
+  const [activeLedgerTab, setActiveLedgerTab] = useState("collections"); // "collections" or "expenses"
 
   const [isMounted, setIsMounted] = useState(false);
 
@@ -71,16 +74,31 @@ export default function Home() {
   });
 
   // --- FILTERED COLLECTIONS & EXPENSES BY ACTIVE COMPANY ---
-  const activeCollections = collections.filter(c => c.companyId === selectedCompanyId);
-  const activeExpenses = expenses.filter(e => e.companyId === selectedCompanyId);
-  const activeBookkeepings = bookkeepings.filter(b => b.companyId === selectedCompanyId);
+  const activeCollections = useMemo(() => {
+    return collections.filter(c => c.companyId === selectedCompanyId);
+  }, [collections, selectedCompanyId]);
+
+  const activeExpenses = useMemo(() => {
+    return expenses.filter(e => e.companyId === selectedCompanyId);
+  }, [expenses, selectedCompanyId]);
+
+  const activeBookkeepings = useMemo(() => {
+    return bookkeepings.filter(b => b.companyId === selectedCompanyId);
+  }, [bookkeepings, selectedCompanyId]);
 
   // Scan for collections due today or overdue
-  const todayStr = new Date().toISOString().split("T")[0];
-  const dueCollections = activeCollections.filter(col => {
-    const isPending = col.status?.toLowerCase() === "pending" || col.status?.toLowerCase() === "partial payment";
-    return isPending && col.date <= todayStr;
-  });
+  const dueCollections = useMemo(() => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const todayStr = `${year}-${month}-${day}`;
+    
+    return activeCollections.filter(col => {
+      const isPending = col.status?.toLowerCase() === "pending" || col.status?.toLowerCase() === "partial payment";
+      return isPending && col.date <= todayStr;
+    });
+  }, [activeCollections]);
 
   // Sync clock every second
   useEffect(() => {
@@ -684,9 +702,28 @@ export default function Home() {
 
 
   // --- SUMMARY CALCULATIONS ---
-  const totalCollectionsValue = activeCollections.reduce((sum, i) => sum + Number(i.amount || 0), 0);
-  const totalExpensesValue = activeExpenses.reduce((sum, i) => sum + Number(i.amount || 0), 0);
-  const netBalance = totalCollectionsValue - totalExpensesValue;
+  const totalCollectionsValue = useMemo(() => {
+    return activeCollections.reduce((sum, i) => sum + Number(i.amount || 0), 0);
+  }, [activeCollections]);
+
+  const totalExpensesValue = useMemo(() => {
+    return activeExpenses.reduce((sum, i) => sum + Number(i.amount || 0), 0);
+  }, [activeExpenses]);
+
+  const totalReceivedInflow = useMemo(() => {
+    return activeCollections.reduce((sum, item) => {
+      const received = item.status?.toLowerCase() === "received" 
+        ? Number(item.amount || 0) 
+        : item.status?.toLowerCase() === "partial payment" 
+        ? Number(item.paidAmount || 0) 
+        : 0;
+      return sum + received;
+    }, 0);
+  }, [activeCollections]);
+
+  const netBalance = useMemo(() => {
+    return totalCollectionsValue - totalExpensesValue;
+  }, [totalCollectionsValue, totalExpensesValue]);
 
   return (
     <div className="min-h-screen bg-slate-50/50 p-6 md:p-10 relative" suppressHydrationWarning>
@@ -769,25 +806,39 @@ export default function Home() {
                   
                   {/* Quick-list of due collections */}
                   <div className="flex flex-wrap gap-2 mt-2">
-                    {dueCollections.slice(0, 3).map(col => (
-                      <div key={col.id} className="flex items-center gap-2 bg-white border border-red-100/50 rounded-lg px-2.5 py-1 text-xs shadow-xs">
-                        <span className="font-semibold text-slate-700 truncate max-w-[150px]">{col.description}</span>
-                        <span className="text-slate-300 font-light">|</span>
-                        <span className="font-bold text-red-600">₹{Number(col.amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
-                        <button
-                          onClick={async () => {
-                            await handleUpdateCollection(col.id, { ...col, status: "Received" });
-                          }}
-                          className="ml-1 text-[9px] bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/50 font-bold px-1.5 py-0.5 rounded transition-colors cursor-pointer"
-                        >
-                          Receive
-                        </button>
-                      </div>
-                    ))}
+                    {dueCollections.slice(0, 3).map(col => {
+                      const isPartial = col.status?.toLowerCase() === "partial payment";
+                      const dueAmount = isPartial ? Number(col.amount - (col.paidAmount || 0)) : Number(col.amount);
+                      return (
+                        <div key={col.id} className="flex flex-wrap items-center gap-2 bg-white border border-red-100/50 rounded-lg px-2.5 py-1 text-xs shadow-xs">
+                          <span className="font-semibold text-slate-700 truncate max-w-[150px]">{col.description}</span>
+                          <span className="text-slate-400 font-light text-[10px] flex items-center gap-0.5">
+                            <Calendar size={10} className="text-slate-400" />
+                            {col.date}
+                          </span>
+                          <span className="text-slate-300 font-light">|</span>
+                          <span className="font-bold text-red-600" title={isPartial ? `Total: ₹${Number(col.amount).toLocaleString("en-IN")} (Paid: ₹${Number(col.paidAmount).toLocaleString("en-IN")})` : ""}>
+                            ₹{dueAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                            {isPartial && <span className="text-[9px] text-slate-400 font-normal ml-1">(due)</span>}
+                          </span>
+                          <button
+                            onClick={async () => {
+                              await handleUpdateCollection(col.id, { ...col, status: "Received" });
+                            }}
+                            className="ml-1 text-[9px] bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/50 font-bold px-1.5 py-0.5 rounded transition-colors cursor-pointer"
+                          >
+                            Receive
+                          </button>
+                        </div>
+                      );
+                    })}
                     {dueCollections.length > 3 && (
-                      <div className="flex items-center bg-slate-100 border border-slate-200 rounded-lg px-2.5 py-1 text-[10px] text-slate-500 font-bold">
+                      <button
+                        onClick={() => setIsDueModalOpen(true)}
+                        className="flex items-center bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg px-2.5 py-1 text-[10px] text-slate-550 font-bold cursor-pointer transition-colors"
+                      >
                         +{dueCollections.length - 3} more
-                      </div>
+                      </button>
                     )}
                   </div>
                 </div>
@@ -1070,21 +1121,66 @@ export default function Home() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
                   transition={{ duration: 0.25 }}
-                  className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start"
+                  className="space-y-6"
                 >
-                  <CollectionList
-                    items={activeCollections}
-                    onAdd={handleAddCollection}
-                    onUpdate={handleUpdateCollection}
-                    onDelete={handleDeleteCollection}
-                    onAddReminder={handleAddReminder}
-                  />
-                  <FixedExpenses
-                    items={activeExpenses}
-                    onAdd={handleAddExpense}
-                    onUpdate={handleUpdateExpense}
-                    onDelete={handleDeleteExpense}
-                  />
+                  {/* Ledger sub-tabs selector bar with totals */}
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white/80 border border-slate-200/80 rounded-2xl p-4 shadow-sm backdrop-blur-md">
+                    {/* Sub-tabs toggle selector */}
+                    <div className="flex gap-1.5 bg-slate-100 p-1 rounded-xl w-full sm:max-w-xs relative">
+                      <button
+                        onClick={() => setActiveLedgerTab("collections")}
+                        className={`flex-1 py-2 px-3 text-xs font-bold rounded-lg transition-colors cursor-pointer text-center ${
+                          activeLedgerTab === "collections"
+                            ? "bg-slate-900 text-white shadow-sm"
+                            : "text-slate-500 hover:text-slate-700"
+                        }`}
+                      >
+                        Collections
+                      </button>
+                      <button
+                        onClick={() => setActiveLedgerTab("expenses")}
+                        className={`flex-1 py-2 px-3 text-xs font-bold rounded-lg transition-colors cursor-pointer text-center ${
+                          activeLedgerTab === "expenses"
+                            ? "bg-slate-900 text-white shadow-sm"
+                            : "text-slate-500 hover:text-slate-700"
+                        }`}
+                      >
+                        Expenses
+                      </button>
+                    </div>
+
+                    {/* Total Amount Display for current sub-tab */}
+                    <div className="text-left sm:text-right shrink-0">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        {activeLedgerTab === "collections" ? "Total Collected (Received)" : "Total Outflow Paid"}
+                      </span>
+                      <h4 className="text-xl font-extrabold text-slate-800 mt-0.5">
+                        ₹{activeLedgerTab === "collections"
+                          ? totalReceivedInflow.toLocaleString("en-IN", { minimumFractionDigits: 2 })
+                          : totalExpensesValue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </h4>
+                    </div>
+                  </div>
+
+                  {/* Render active sub-tab list */}
+                  <div className="grid grid-cols-1 gap-8 items-start">
+                    {activeLedgerTab === "collections" ? (
+                      <CollectionList
+                        items={activeCollections}
+                        onAdd={handleAddCollection}
+                        onUpdate={handleUpdateCollection}
+                        onDelete={handleDeleteCollection}
+                        onAddReminder={handleAddReminder}
+                      />
+                    ) : (
+                      <FixedExpenses
+                        items={activeExpenses}
+                        onAdd={handleAddExpense}
+                        onUpdate={handleUpdateExpense}
+                        onDelete={handleDeleteExpense}
+                      />
+                    )}
+                  </div>
                 </motion.div>
               ) : activeTab === "analytics" ? (
                 <motion.div
@@ -1176,14 +1272,32 @@ export default function Home() {
                   <div className="p-3 bg-indigo-50/50 border border-indigo-100 rounded-lg text-left text-xs space-y-1.5">
                     <p className="font-bold text-indigo-950 uppercase text-[9px] tracking-wider">Linked Collection Details</p>
                     <div className="flex justify-between">
-                      <span className="text-slate-500">Amount:</span>
+                      <span className="text-slate-500">Total Amount:</span>
                       <span className="font-semibold text-slate-800">₹{Number(linkedCol.amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    {linkedCol.status?.toLowerCase() === "partial payment" && (
+                      <>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Paid Amount:</span>
+                          <span className="font-semibold text-emerald-700">₹{Number(linkedCol.paidAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Due Amount:</span>
+                          <span className="font-semibold text-red-650">₹{Number(linkedCol.amount - (linkedCol.paidAmount || 0)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      </>
+                    )}
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Due Date:</span>
+                      <span className="font-semibold text-slate-800">{linkedCol.date}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-500">Status:</span>
                       <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
                         linkedCol.status?.toLowerCase() === "received"
                           ? "bg-emerald-100 text-emerald-800"
+                          : linkedCol.status?.toLowerCase() === "partial payment"
+                          ? "bg-indigo-100 text-indigo-800"
                           : "bg-amber-100 text-amber-800"
                       }`}>
                         {linkedCol.status}
@@ -1230,6 +1344,94 @@ export default function Home() {
             </div>
           );
         })()}
+      </AnimatePresence>
+
+      {/* Due collections details modal */}
+      <AnimatePresence>
+        {isDueModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-md bg-white border border-slate-100 rounded-xl overflow-hidden shadow-2xl p-6 space-y-4"
+            >
+              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2 text-red-600 font-bold">
+                  <AlertTriangle size={18} className="animate-pulse" />
+                  <h4 className="font-bold text-sm text-slate-800">
+                    Overdue Collections List ({dueCollections.length})
+                  </h4>
+                </div>
+                <button
+                  onClick={() => setIsDueModalOpen(false)}
+                  className="text-slate-400 hover:text-slate-600 rounded-lg p-1 transition-colors cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="max-h-[300px] overflow-y-auto custom-scrollbar space-y-2 pr-1">
+                {dueCollections.map(col => {
+                  const isPartial = col.status?.toLowerCase() === "partial payment";
+                  const dueAmount = isPartial ? Number(col.amount - (col.paidAmount || 0)) : Number(col.amount);
+                  return (
+                    <div key={col.id} className="flex justify-between items-center p-3 bg-slate-50 border border-slate-200/60 rounded-xl gap-3">
+                      <div className="space-y-1 min-w-0">
+                        <p className="font-bold text-xs text-slate-800 truncate">{col.description}</p>
+                        <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-400">
+                          <span className="flex items-center gap-0.5 font-medium">
+                            <Calendar size={10} />
+                            Due: {col.date}
+                          </span>
+                          <span>•</span>
+                          <span className={`font-semibold uppercase ${isPartial ? "text-indigo-600" : "text-amber-600"}`}>
+                            {col.status}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-3 shrink-0">
+                        <div className="text-right">
+                          <p className="text-xs font-bold text-red-650">
+                            ₹{dueAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          </p>
+                          {isPartial && (
+                            <p className="text-[8px] text-slate-450 font-normal">
+                              Total: ₹{Number(col.amount).toLocaleString("en-IN")}
+                            </p>
+                          )}
+                        </div>
+                        
+                        <button
+                          onClick={async () => {
+                            await handleUpdateCollection(col.id, { ...col, status: "Received" });
+                            if (dueCollections.length <= 1) {
+                              setIsDueModalOpen(false);
+                            }
+                          }}
+                          className="px-2.5 py-1.5 text-[10px] bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition-colors cursor-pointer shadow-sm"
+                        >
+                          Receive
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="flex justify-end pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsDueModalOpen(false)}
+                  className="px-4 py-2 text-xs bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-lg transition-colors cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
       </AnimatePresence>
 
       {/* Company Modal */}
