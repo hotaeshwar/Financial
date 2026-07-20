@@ -74,7 +74,10 @@ export default function FinanceChart({ collections = [], expenses = [] }) {
   }, 0);
 
   // Calculate Total Paid Expenses
-  const totalExpensesValue = filteredExpenses.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const totalExpensesValue = filteredExpenses.reduce((sum, item) => {
+    const isPaid = item.status?.toLowerCase() === "paid";
+    return sum + (isPaid ? Number(item.amount || 0) : 0);
+  }, 0);
 
   // Group Collections by Description for Pie slices
   const collectionsGrouped = {};
@@ -99,10 +102,13 @@ export default function FinanceChart({ collections = [], expenses = [] }) {
   // Group Expenses by Description for Pie slices
   const expensesGrouped = {};
   filteredExpenses.forEach(item => {
-    const desc = item.description || "Other";
-    const amt = Number(item.amount || 0);
-    if (amt > 0) {
-      expensesGrouped[desc] = (expensesGrouped[desc] || 0) + amt;
+    const isPaid = item.status?.toLowerCase() === "paid";
+    if (isPaid) {
+      const desc = item.description || "Other";
+      const amt = Number(item.amount || 0);
+      if (amt > 0) {
+        expensesGrouped[desc] = (expensesGrouped[desc] || 0) + amt;
+      }
     }
   });
 

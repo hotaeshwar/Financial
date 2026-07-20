@@ -750,9 +750,16 @@ export default function Home() {
     }, 0);
   }, [activeCollections]);
 
+  const totalPaidExpenses = useMemo(() => {
+    return activeExpenses.reduce((sum, i) => {
+      const isPaid = i.status?.toLowerCase() === "paid";
+      return sum + (isPaid ? Number(i.amount || 0) : 0);
+    }, 0);
+  }, [activeExpenses]);
+
   const netBalance = useMemo(() => {
-    return totalCollectionsValue - totalExpensesValue;
-  }, [totalCollectionsValue, totalExpensesValue]);
+    return totalReceivedInflow - totalPaidExpenses;
+  }, [totalReceivedInflow, totalPaidExpenses]);
 
   return (
     <div className="min-h-screen bg-slate-50/50 p-6 md:p-10 relative" suppressHydrationWarning>
@@ -1057,9 +1064,9 @@ export default function Home() {
             {/* Total Collections Card */}
             <div className="bg-gradient-to-br from-emerald-500 to-teal-600 text-white border-0 shadow-md rounded-xl p-5 flex items-center justify-between">
               <div className="space-y-1">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-teal-100">Total Collections</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-teal-100">Total Received</p>
                 <h3 className="text-2xl font-bold text-white">
-                  ₹{totalCollectionsValue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                  ₹{totalReceivedInflow.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                 </h3>
               </div>
               <div className="p-3 bg-white/20 text-white rounded-xl">
@@ -1070,9 +1077,9 @@ export default function Home() {
             {/* Total Fixed Expenses Card */}
             <div className="bg-gradient-to-br from-rose-500 to-red-650 text-white border-0 shadow-md rounded-xl p-5 flex items-center justify-between">
               <div className="space-y-1">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-rose-100">Fixed Expenses</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-rose-100">Paid Expenses</p>
                 <h3 className="text-2xl font-bold text-white">
-                  ₹{totalExpensesValue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                  ₹{totalPaidExpenses.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                 </h3>
               </div>
               <div className="p-3 bg-white/20 text-white rounded-xl">
@@ -1191,7 +1198,7 @@ export default function Home() {
                       <h4 className="text-xl font-extrabold text-slate-800 mt-0.5">
                         ₹{activeLedgerTab === "collections"
                           ? totalReceivedInflow.toLocaleString("en-IN", { minimumFractionDigits: 2 })
-                          : totalExpensesValue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          : totalPaidExpenses.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                       </h4>
                     </div>
                   </div>

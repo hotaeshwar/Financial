@@ -10,17 +10,27 @@ export default function AiAdvisor({ collections = [], expenses = [] }) {
   const chatContainerRef = useRef(null);
 
   // Computations
-  const totalCols = collections.reduce((sum, i) => sum + Number(i.amount || 0), 0);
-  const totalExps = expenses.reduce((sum, i) => sum + Number(i.amount || 0), 0);
+  const totalCols = collections.reduce((sum, item) => {
+    const received = item.status?.toLowerCase() === "received" 
+      ? Number(item.amount || 0) 
+      : item.status?.toLowerCase() === "partial payment" 
+      ? Number(item.paidAmount || 0) 
+      : 0;
+    return sum + received;
+  }, 0);
+  const totalExps = expenses.reduce((sum, item) => {
+    const isPaid = item.status?.toLowerCase() === "paid";
+    return sum + (isPaid ? Number(item.amount || 0) : 0);
+  }, 0);
   const netSurplus = totalCols - totalExps;
 
   // Generate dynamic brief
   const generateBrief = () => {
     return `Hello. Here is the financial audit summary from BiD AI:
     
-- Total Collections stand at ₹${totalCols.toLocaleString("en-IN", { minimumFractionDigits: 2 })}.
-- Total Fixed Expenses sum to ₹${totalExps.toLocaleString("en-IN", { minimumFractionDigits: 2 })}.
-- Operating surplus is ₹${netSurplus.toLocaleString("en-IN", { minimumFractionDigits: 2 })}.
+- Total Received Collections stand at ₹${totalCols.toLocaleString("en-IN", { minimumFractionDigits: 2 })}.
+- Total Paid Expenses sum to ₹${totalExps.toLocaleString("en-IN", { minimumFractionDigits: 2 })}.
+- Cash operating surplus is ₹${netSurplus.toLocaleString("en-IN", { minimumFractionDigits: 2 })}.
 
 ${netSurplus < 0 ? "Warning: You are running an operational deficit. Consider cutting recurring fixed items immediately." : "Status: Liquid capital is secure. Recommend allocating a portion of surplus to short-term savings."}`;
   };
@@ -67,15 +77,15 @@ ${netSurplus < 0 ? "Warning: You are running an operational deficit. Consider cu
       let answer = "";
 
       if (q.includes("balance") || q.includes("surplus") || q.includes("net") || q.includes("operating")) {
-        answer = `Your Net Operating Surplus is currently ₹${netSurplus.toLocaleString("en-IN")}. This is calculated as Collections (₹${totalCols.toLocaleString("en-IN")}) minus Expenses (₹${totalExps.toLocaleString("en-IN")}).`;
+        answer = `Your Cash Operating Surplus is currently ₹${netSurplus.toLocaleString("en-IN")}. This is calculated as Received Collections (₹${totalCols.toLocaleString("en-IN")}) minus Paid Expenses (₹${totalExps.toLocaleString("en-IN")}).`;
       } else if (q.includes("expense") || q.includes("spending") || q.includes("spend")) {
-        answer = `Total logged fixed expenses amount to ₹${totalExps.toLocaleString("en-IN")} across ${expenses.length} invoices.`;
+        answer = `Total paid expenses amount to ₹${totalExps.toLocaleString("en-IN")} across ${expenses.length} invoices.`;
       } else if (q.includes("collection") || q.includes("revenue") || q.includes("receive")) {
-        answer = `Total collections logged sum to ₹${totalCols.toLocaleString("en-IN")} across ${collections.length} entries.`;
+        answer = `Total received collections amount to ₹${totalCols.toLocaleString("en-IN")} across ${collections.length} entries.`;
       } else if (q.includes("suggest") || q.includes("budget") || q.includes("save") || q.includes("cut")) {
         answer = `Financial Tips: 1. Audit recurring fixed expenses to identify unused cloud or rent operations. 2. Establish automatic milestone invoicing to shorten collection payment windows.`;
       } else {
-        answer = `Understood. Based on database values: net surplus is ₹${netSurplus.toLocaleString("en-IN")}, collections total ₹${totalCols.toLocaleString("en-IN")}, and fixed expenses total ₹${totalExps.toLocaleString("en-IN")}.`;
+        answer = `Understood. Based on database values: net surplus is ₹${netSurplus.toLocaleString("en-IN")}, received collections total ₹${totalCols.toLocaleString("en-IN")}, and paid expenses total ₹${totalExps.toLocaleString("en-IN")}.`;
       }
 
       setChatLog(prev => [...prev, { sender: "bot", text: answer }]);
