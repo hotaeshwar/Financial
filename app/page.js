@@ -1164,63 +1164,21 @@ export default function Home() {
                   transition={{ duration: 0.25 }}
                   className="space-y-6"
                 >
-                  {/* Ledger sub-tabs selector bar with totals */}
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white/80 border border-slate-200/80 rounded-2xl p-4 shadow-sm backdrop-blur-md">
-                    {/* Sub-tabs toggle selector */}
-                    <div className="flex gap-1.5 bg-slate-100 p-1 rounded-xl w-full sm:max-w-xs relative">
-                      <button
-                        onClick={() => setActiveLedgerTab("collections")}
-                        className={`flex-1 py-2 px-3 text-xs font-bold rounded-lg transition-colors cursor-pointer text-center ${
-                          activeLedgerTab === "collections"
-                            ? "bg-slate-900 text-white shadow-sm"
-                            : "text-slate-500 hover:text-slate-700"
-                        }`}
-                      >
-                        Collections
-                      </button>
-                      <button
-                        onClick={() => setActiveLedgerTab("expenses")}
-                        className={`flex-1 py-2 px-3 text-xs font-bold rounded-lg transition-colors cursor-pointer text-center ${
-                          activeLedgerTab === "expenses"
-                            ? "bg-slate-900 text-white shadow-sm"
-                            : "text-slate-500 hover:text-slate-700"
-                        }`}
-                      >
-                        Expenses
-                      </button>
-                    </div>
-
-                    {/* Total Amount Display for current sub-tab */}
-                    <div className="text-left sm:text-right shrink-0">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                        {activeLedgerTab === "collections" ? "Total Collected (Received)" : "Total Outflow Paid"}
-                      </span>
-                      <h4 className="text-xl font-extrabold text-slate-800 mt-0.5">
-                        ₹{activeLedgerTab === "collections"
-                          ? totalReceivedInflow.toLocaleString("en-IN", { minimumFractionDigits: 2 })
-                          : totalPaidExpenses.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                      </h4>
-                    </div>
-                  </div>
-
-                  {/* Render active sub-tab list */}
-                  <div className="grid grid-cols-1 gap-8 items-start">
-                    {activeLedgerTab === "collections" ? (
-                      <CollectionList
-                        items={activeCollections}
-                        onAdd={handleAddCollection}
-                        onUpdate={handleUpdateCollection}
-                        onDelete={handleDeleteCollection}
-                        onAddReminder={handleAddReminder}
-                      />
-                    ) : (
-                      <FixedExpenses
-                        items={activeExpenses}
-                        onAdd={handleAddExpense}
-                        onUpdate={handleUpdateExpense}
-                        onDelete={handleDeleteExpense}
-                      />
-                    )}
+                  {/* Render collections and expenses lists side-by-side */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+                    <CollectionList
+                      items={activeCollections}
+                      onAdd={handleAddCollection}
+                      onUpdate={handleUpdateCollection}
+                      onDelete={handleDeleteCollection}
+                      onAddReminder={handleAddReminder}
+                    />
+                    <FixedExpenses
+                      items={activeExpenses}
+                      onAdd={handleAddExpense}
+                      onUpdate={handleUpdateExpense}
+                      onDelete={handleDeleteExpense}
+                    />
                   </div>
                 </motion.div>
               ) : activeTab === "analytics" ? (
