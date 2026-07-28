@@ -258,6 +258,11 @@ export default function FixedExpenses({
     (item.status && item.status.toLowerCase().includes(search.toLowerCase()))
   );
 
+  const totalPaidVal = items.reduce((sum, item) => {
+    const isPaid = item.status?.toLowerCase() === "paid";
+    return sum + (isPaid ? Number(item.amount || 0) : 0);
+  }, 0);
+
   return (
     <div className="bg-white border border-slate-100 rounded-xl p-5 shadow-sm">
       {/* Header and Controls */}
@@ -272,23 +277,28 @@ export default function FixedExpenses({
           <p className="text-xs text-slate-400">Regular expenditures and bill payments</p>
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <div className="flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-100/70 rounded-lg px-2 py-1.5 sm:px-3 text-xs font-semibold shadow-sm">
+            <span className="text-[9px] sm:text-[10px] text-emerald-600 uppercase font-bold tracking-wider">Paid:</span>
+            <span className="text-[11px] sm:text-xs">₹{totalPaidVal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+          </div>
+
           <button
             type="button"
             onClick={() => exportToExcel(items, "Fixed_Expenses_Report.xls")}
-            className="flex items-center gap-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-medium text-xs py-2 px-3.5 rounded-lg transition-colors shadow-sm cursor-pointer"
+            className="flex items-center gap-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-medium text-[11px] sm:text-xs py-1.5 sm:py-2 px-2 sm:px-3 rounded-lg transition-colors shadow-sm cursor-pointer"
             title="Download report in Excel format"
           >
-            <FileText size={14} className="text-emerald-600" />
+            <FileText size={13} className="text-emerald-600" />
             <span>Export Excel</span>
           </button>
           
           <button
             type="button"
             onClick={handleOpenAdd}
-            className="flex items-center gap-1 bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs py-2 px-3.5 rounded-lg transition-colors shadow-sm cursor-pointer"
+            className="flex items-center gap-1 bg-slate-900 hover:bg-slate-800 text-white font-medium text-[11px] sm:text-xs py-1.5 sm:py-2 px-2 sm:px-3 rounded-lg transition-colors shadow-sm cursor-pointer"
           >
-            <Plus size={14} />
+            <Plus size={13} />
             <span>Add Record</span>
           </button>
         </div>
