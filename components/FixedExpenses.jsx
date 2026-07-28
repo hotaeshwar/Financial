@@ -113,7 +113,7 @@ const exportToExcel = (items, filename) => {
         statusStyle = "UnpaidStyle";
       } else if (statusLower === "pending") {
         statusStyle = "PendingStyle";
-      } else if (statusLower === "processing") {
+      } else if (statusLower === "processing" || statusLower === "partial" || statusLower === "partial payment") {
         statusStyle = "ProcessingStyle";
       }
 
@@ -166,6 +166,7 @@ export default function FixedExpenses({
   const [formData, setFormData] = useState({
     description: "",
     amount: "",
+    paidAmount: "",
     date: "",
     status: "Unpaid"
   });
@@ -178,6 +179,7 @@ export default function FixedExpenses({
     setFormData({
       description: "",
       amount: "",
+      paidAmount: "",
       date: new Date().toISOString().split("T")[0],
       status: "Unpaid"
     });
@@ -191,6 +193,7 @@ export default function FixedExpenses({
     setFormData({
       description: item.description,
       amount: item.amount.toString(),
+      paidAmount: item.paidAmount !== undefined ? item.paidAmount.toString() : "",
       date: item.date,
       status: item.status || ""
     });
@@ -227,9 +230,25 @@ export default function FixedExpenses({
       return;
     }
 
+    let finalPaidAmount = 0;
+    if (formData.status === "Partial") {
+      if (!formData.paidAmount || isNaN(formData.paidAmount) || Number(formData.paidAmount) <= 0) {
+        setError("Paid amount must be a positive number.");
+        return;
+      }
+      if (Number(formData.paidAmount) >= Number(formData.amount)) {
+        setError("Paid amount for partial payment must be less than total amount (otherwise set status to Paid).");
+        return;
+      }
+      finalPaidAmount = Number(formData.paidAmount);
+    } else if (formData.status === "Paid") {
+      finalPaidAmount = Number(formData.amount);
+    }
+
     const payload = {
       description: formData.description.trim(),
       amount: Number(formData.amount),
+      paidAmount: finalPaidAmount,
       date: formData.date,
       status: formData.status.trim()
     };
@@ -258,10 +277,7 @@ export default function FixedExpenses({
     (item.status && item.status.toLowerCase().includes(search.toLowerCase()))
   );
 
-  const totalPaidVal = items.reduce((sum, item) => {
-    const isPaid = item.status?.toLowerCase() === "paid";
-    return sum + (isPaid ? Number(item.amount || 0) : 0);
-  }, 0);
+  const totalAmountVal = items.reduce((sum, item) => sum + Number(item.amount || 0), 0);
 
   return (
     <div className="bg-white border border-slate-100 rounded-xl p-5 shadow-sm">
@@ -278,9 +294,9 @@ export default function FixedExpenses({
         </div>
         
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-          <div className="flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-100/70 rounded-lg px-2 py-1.5 sm:px-3 text-xs font-semibold shadow-sm">
-            <span className="text-[9px] sm:text-[10px] text-emerald-600 uppercase font-bold tracking-wider">Paid:</span>
-            <span className="text-[11px] sm:text-xs">₹{totalPaidVal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+          <div className="flex items-center gap-1 bg-slate-50 text-slate-700 border border-slate-200/70 rounded-lg px-2 py-1.5 sm:px-3 text-xs font-semibold shadow-sm">
+            <span className="text-[9px] sm:text-[10px] text-slate-500 uppercase font-bold tracking-wider">Total:</span>
+            <span className="text-[11px] sm:text-xs">₹{totalAmountVal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
           </div>
 
           <button
@@ -345,6 +361,8 @@ export default function FixedExpenses({
                         ? "bg-emerald-50 border-emerald-200/50 text-emerald-700"
                         : item.status?.toLowerCase() === "unpaid"
                         ? "bg-rose-50 border-rose-200/50 text-rose-700"
+                        : (item.status?.toLowerCase() === "partial" || item.status?.toLowerCase() === "partial payment")
+                        ? "bg-indigo-50 border-indigo-200/50 text-indigo-700"
                         : item.status?.toLowerCase() === "pending"
                         ? "bg-amber-50 border-amber-200/50 text-amber-700"
                         : "bg-slate-50 border-slate-200/50 text-slate-700"
@@ -488,10 +506,46 @@ export default function FixedExpenses({
                     >
                       <option value="Unpaid">Unpaid</option>
                       <option value="Paid">Paid</option>
-                      <option value="Pending">Pending</option>
+                      <option value="Partial">Partial</option>
                     </select>
                   </div>
                 </div>
+
+                {/* Paid Amount (only for Partial status) */}
+                {formData.status === "Partial" && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="space-y-3 pt-1"
+                  >
+                    <div>
+                      <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">Paid Amount (₹)</label>
+                      <div className="relative">
+                        <span className="absolute inset-y-0 left-0 flex items-center pl-2.5 pointer-events-none text-slate-400">
+                          <IndianRupee size={12} />
+                        </span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          name="paidAmount"
+                          value={formData.paidAmount}
+                          onChange={handleChange}
+                          placeholder="0.00"
+                          className="w-full pl-7 pr-3 border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-slate-500 text-slate-700"
+                        />
+                      </div>
+                    </div>
+                    {formData.amount && !isNaN(formData.amount) && (
+                      <div className="p-2 bg-slate-50 border border-slate-200 rounded text-[10px] text-slate-600 flex justify-between font-semibold">
+                        <span>Remaining Balance:</span>
+                        <span className="text-red-500">
+                          ₹{Number(formData.amount - (formData.paidAmount || 0)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
 
                 {/* Buttons */}
                 <div className="flex gap-2 pt-2 border-t border-slate-100">

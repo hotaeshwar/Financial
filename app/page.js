@@ -753,7 +753,9 @@ export default function Home() {
   const totalPaidExpenses = useMemo(() => {
     return activeExpenses.reduce((sum, i) => {
       const isPaid = i.status?.toLowerCase() === "paid";
-      return sum + (isPaid ? Number(i.amount || 0) : 0);
+      const isPartial = i.status?.toLowerCase() === "partial" || i.status?.toLowerCase() === "partial payment";
+      const paid = isPaid ? Number(i.amount || 0) : isPartial ? Number(i.paidAmount || 0) : 0;
+      return sum + paid;
     }, 0);
   }, [activeExpenses]);
 

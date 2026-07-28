@@ -352,13 +352,7 @@ export default function CollectionList({
     (item.status && item.status.toLowerCase().includes(search.toLowerCase()))
   );
 
-  const totalReceivedVal = items.reduce((sum, item) => {
-    const isPartial = item.status?.toLowerCase() === "partial payment";
-    const isReceived = item.status?.toLowerCase() === "received";
-    const amt = Number(item.amount || 0);
-    const paid = isReceived ? amt : isPartial ? Number(item.paidAmount || 0) : 0;
-    return sum + paid;
-  }, 0);
+  const totalAmountVal = items.reduce((sum, item) => sum + Number(item.amount || 0), 0);
 
   return (
     <div className="bg-white border border-slate-100 rounded-xl p-5 shadow-sm">
@@ -375,9 +369,9 @@ export default function CollectionList({
         </div>
         
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-          <div className="flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-100/70 rounded-lg px-2 py-1.5 sm:px-3 text-xs font-semibold shadow-sm">
-            <span className="text-[9px] sm:text-[10px] text-emerald-600 uppercase font-bold tracking-wider">Received:</span>
-            <span className="text-[11px] sm:text-xs">₹{totalReceivedVal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+          <div className="flex items-center gap-1 bg-slate-50 text-slate-700 border border-slate-200/70 rounded-lg px-2 py-1.5 sm:px-3 text-xs font-semibold shadow-sm">
+            <span className="text-[9px] sm:text-[10px] text-slate-500 uppercase font-bold tracking-wider">Total:</span>
+            <span className="text-[11px] sm:text-xs">₹{totalAmountVal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
           </div>
 
           <button
