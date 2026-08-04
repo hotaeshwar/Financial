@@ -942,11 +942,7 @@ export default function Home() {
           const updated = await dbService.updateCollection(col.id, { archived: true });
           updatedCols.push({ ...col, ...updated, archived: true });
         } else {
-          // Archive in the current period
-          const updated = await dbService.updateCollection(col.id, { archived: true });
-          updatedCols.push({ ...col, ...updated, archived: true });
-          
-          // Clone to next period (preserving original dates and status)
+          // Carry forward: clone to next period (preserving original dates and status), do NOT archive original in the closed period
           const { id, ...clonedFields } = col;
           const newItem = await dbService.addCollection({
             ...clonedFields,
@@ -978,11 +974,7 @@ export default function Home() {
           const updated = await dbService.updateExpense(exp.id, { archived: true });
           updatedExps.push({ ...exp, ...updated, archived: true });
         } else {
-          // Archive in the current period
-          const updated = await dbService.updateExpense(exp.id, { archived: true });
-          updatedExps.push({ ...exp, ...updated, archived: true });
-          
-          // Clone to next period (preserving original dates and status)
+          // Carry forward: clone to next period (preserving original dates and status), do NOT archive original in the closed period
           const { id, ...clonedFields } = exp;
           const newItem = await dbService.addExpense({
             ...clonedFields,
