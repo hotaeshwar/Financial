@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Edit3, Trash2, Search, X, Check, IndianRupee, Calendar, Tag, FileText, Bell } from "lucide-react";
+import { Plus, Edit3, Trash2, Search, X, Check, IndianRupee, Calendar, Tag, FileText, Bell, Lock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import ReceiptModal from "./ReceiptModal";
 
@@ -177,7 +177,8 @@ export default function CollectionList({
   onAdd, 
   onUpdate, 
   onDelete,
-  onAddReminder
+  onAddReminder,
+  isClosedPeriod = false
 }) {
   const [search, setSearch] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -364,6 +365,12 @@ export default function CollectionList({
             <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-medium">
               {filteredItems.length}
             </span>
+            {isClosedPeriod && (
+              <span className="text-[9px] bg-slate-100 text-slate-500 border border-slate-205 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1">
+                <Lock size={9} />
+                <span>Archived</span>
+              </span>
+            )}
           </h3>
           <p className="text-xs text-slate-400">Incoming receivables and payments</p>
         </div>
@@ -384,14 +391,16 @@ export default function CollectionList({
             <span>Export Excel</span>
           </button>
           
-          <button
-            type="button"
-            onClick={handleOpenAdd}
-            className="flex items-center gap-1 bg-slate-900 hover:bg-slate-800 text-white font-medium text-[11px] sm:text-xs py-1.5 sm:py-2 px-2 sm:px-3 rounded-lg transition-colors shadow-sm cursor-pointer"
-          >
-            <Plus size={13} />
-            <span>Add Record</span>
-          </button>
+          {!isClosedPeriod && (
+            <button
+              type="button"
+              onClick={handleOpenAdd}
+              className="flex items-center gap-1 bg-slate-900 hover:bg-slate-800 text-white font-medium text-[11px] sm:text-xs py-1.5 sm:py-2 px-2 sm:px-3 rounded-lg transition-colors shadow-sm cursor-pointer"
+            >
+              <Plus size={13} />
+              <span>Add Record</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -480,7 +489,7 @@ export default function CollectionList({
                           </svg>
                         </button>
                         
-                        {item.status?.toLowerCase() !== "received" && (
+                        {!isClosedPeriod && item.status?.toLowerCase() !== "received" && (
                           <button
                             type="button"
                             onClick={() => handleOpenReminderModal(item)}
@@ -491,18 +500,24 @@ export default function CollectionList({
                           </button>
                         )}
                         
-                        <button
-                          onClick={() => handleOpenEdit(item)}
-                          className="p-1 rounded text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-colors"
-                        >
-                          <Edit3 size={13} />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteClick(item)}
-                          className="p-1 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                        {!isClosedPeriod && (
+                          <>
+                            <button
+                              onClick={() => handleOpenEdit(item)}
+                              className="p-1 rounded text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-colors"
+                              title="Edit"
+                            >
+                              <Edit3 size={13} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteClick(item)}
+                              className="p-1 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                              title="Delete"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>

@@ -24,7 +24,9 @@ import {
   Plus,
   Trash2,
   Edit3,
-  Calendar
+  Calendar,
+  Archive,
+  Lock
 } from "lucide-react";
 import CollectionList from "@/components/CollectionList";
 import FixedExpenses from "@/components/FixedExpenses";
@@ -75,18 +77,141 @@ export default function Home() {
     code: null
   });
 
-  // --- FILTERED COLLECTIONS & EXPENSES BY ACTIVE COMPANY ---
+  // --- PERIOD MANAGEMENT STATES AND HELPERS ---
+  const [viewingPeriod, setViewingPeriod] = useState("");
+  const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
+
+  const getCurrentMonthYear = () => {
+    return new Date().toLocaleString("en-US", { month: "long", year: "numeric" });
+  };
+
+  const getNextPeriod = (currentPeriod) => {
+    if (!currentPeriod) currentPeriod = getCurrentMonthYear();
+    const [monthStr, yearStr] = currentPeriod.split(" ");
+    const date = new Date(`${monthStr} 1, ${yearStr}`);
+    if (isNaN(date.getTime())) {
+      const fallback = new Date();
+      fallback.setMonth(fallback.getMonth() + 1);
+      return fallback.toLocaleString("en-US", { month: "long", year: "numeric" });
+    }
+    date.setMonth(date.getMonth() + 1);
+    return date.toLocaleString("en-US", { month: "long", year: "numeric" });
+  };
+
+  const getPeriodFromDate = (dateStr) => {
+    if (!dateStr) return getCurrentMonthYear();
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return getCurrentMonthYear();
+    return date.toLocaleString("en-US", { month: "long", year: "numeric" });
+  };
+
+  // --- FILTERED COLLECTIONS & EXPENSES BY ACTIVE COMPANY & SELECTED PERIOD ---
+  const activeCompany = useMemo(() => {
+    return companies.find(c => c.id === selectedCompanyId);
+  }, [companies, selectedCompanyId]);
+
+  const activePeriod = useMemo(() => {
+    return viewingPeriod || activeCompany?.currentPeriod || getCurrentMonthYear();
+  }, [viewingPeriod, activeCompany]);
+
+  // Reset viewing period when company changes or when active company's currentPeriod changes
+  useEffect(() => {
+    if (activeCompany) {
+      setViewingPeriod(activeCompany.currentPeriod || getCurrentMonthYear());
+    }
+  }, [selectedCompanyId, activeCompany?.currentPeriod]);
+
+  // Collect all unique periods present in the company's transactions + its currentPeriod
+  const availablePeriods = useMemo(() => {
+    const periods = new Set();
+    if (activeCompany?.currentPeriod) {
+      periods.add(activeCompany.currentPeriod);
+    } else {
+      periods.add(getCurrentMonthYear());
+    }
+    
+    collections.forEach(c => {
+      if (c.companyId === selectedCompanyId && c.period) {
+        periods.add(c.period);
+      }
+    });
+    expenses.forEach(e => {
+      if (e.companyId === selectedCompanyId && e.period) {
+        periods.add(e.period);
+      }
+    });
+    bookkeepings.forEach(b => {
+      if (b.companyId === selectedCompanyId && b.period) {
+        periods.add(b.period);
+      }
+    });
+    
+    return Array.from(periods).sort((a, b) => {
+      const dateA = new Date(a);
+      const dateB = new Date(b);
+      return dateB.getTime() - dateA.getTime();
+    });
+  }, [collections, expenses, bookkeepings, selectedCompanyId, activeCompany]);
+
+  const archivePreview = useMemo(() => {
+    if (!activeCompany) return null;
+    const currentPeriod = activeCompany.currentPeriod || getCurrentMonthYear();
+    
+    const companyCols = collections.filter(
+      c => c.companyId === selectedCompanyId && c.period === currentPeriod
+    );
+    const companyExps = expenses.filter(
+      e => e.companyId === selectedCompanyId && e.period === currentPeriod
+    );
+    const companyBks = bookkeepings.filter(
+      b => b.companyId === selectedCompanyId && b.period === currentPeriod
+    );
+    
+    const settledCols = companyCols.filter(c => c.status?.toLowerCase() === "received");
+    const outstandingCols = companyCols.filter(c => c.status?.toLowerCase() !== "received");
+    
+    const settledExps = companyExps.filter(e => e.status?.toLowerCase() === "paid");
+    const outstandingExps = companyExps.filter(e => e.status?.toLowerCase() !== "paid");
+    
+    const settledBks = companyBks;
+    
+    return {
+      currentPeriod,
+      nextPeriod: getNextPeriod(currentPeriod),
+      settledColsCount: settledCols.length,
+      outstandingColsCount: outstandingCols.length,
+      settledExpsCount: settledExps.length,
+      outstandingExpsCount: outstandingExps.length,
+      settledBksCount: settledBks.length
+    };
+  }, [collections, expenses, bookkeepings, selectedCompanyId, activeCompany]);
+
   const activeCollections = useMemo(() => {
-    return collections.filter(c => c.companyId === selectedCompanyId);
-  }, [collections, selectedCompanyId]);
+    const isCurrent = activePeriod === (activeCompany?.currentPeriod || getCurrentMonthYear());
+    return collections.filter(c => 
+      c.companyId === selectedCompanyId && 
+      c.period === activePeriod && 
+      (!isCurrent || !c.archived)
+    );
+  }, [collections, selectedCompanyId, activePeriod, activeCompany]);
 
   const activeExpenses = useMemo(() => {
-    return expenses.filter(e => e.companyId === selectedCompanyId);
-  }, [expenses, selectedCompanyId]);
+    const isCurrent = activePeriod === (activeCompany?.currentPeriod || getCurrentMonthYear());
+    return expenses.filter(e => 
+      e.companyId === selectedCompanyId && 
+      e.period === activePeriod && 
+      (!isCurrent || !e.archived)
+    );
+  }, [expenses, selectedCompanyId, activePeriod, activeCompany]);
 
   const activeBookkeepings = useMemo(() => {
-    return bookkeepings.filter(b => b.companyId === selectedCompanyId);
-  }, [bookkeepings, selectedCompanyId]);
+    const isCurrent = activePeriod === (activeCompany?.currentPeriod || getCurrentMonthYear());
+    return bookkeepings.filter(b => 
+      b.companyId === selectedCompanyId && 
+      b.period === activePeriod && 
+      (!isCurrent || !b.archived)
+    );
+  }, [bookkeepings, selectedCompanyId, activePeriod, activeCompany]);
 
   // Scan for collections due today or overdue
   const dueCollections = useMemo(() => {
@@ -154,9 +279,20 @@ export default function Home() {
         if (!comps || comps.length === 0) {
           const defaultComp = await dbService.addCompany({
             name: "Main Company",
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            currentPeriod: getCurrentMonthYear()
           });
           comps = [defaultComp];
+        } else {
+          // If any company lacks currentPeriod, initialize it
+          for (let i = 0; i < comps.length; i++) {
+            if (!comps[i].currentPeriod) {
+              const updated = await dbService.updateCompany(comps[i].id, {
+                currentPeriod: getCurrentMonthYear()
+              });
+              comps[i] = { ...comps[i], ...updated };
+            }
+          }
         }
         setCompanies(comps);
         
@@ -168,10 +304,34 @@ export default function Home() {
         const exps = await dbService.getExpenses();
         const bks = await dbService.getBookkeepings ? await dbService.getBookkeepings() : [];
         
-        // Ensure all existing items have a companyId
-        const mappedCols = cols.map(c => c.companyId ? c : { ...c, companyId: activeCompId });
-        const mappedExps = exps.map(e => e.companyId ? e : { ...e, companyId: activeCompId });
-        const mappedBks = bks.map(b => b.companyId ? b : { ...b, companyId: activeCompId });
+        // Ensure all existing items have a companyId, period, and archived flag
+        const mappedCols = cols.map(c => {
+          const compId = c.companyId || activeCompId;
+          return {
+            ...c,
+            companyId: compId,
+            period: c.period || getPeriodFromDate(c.date),
+            archived: c.archived || false
+          };
+        });
+        const mappedExps = exps.map(e => {
+          const compId = e.companyId || activeCompId;
+          return {
+            ...e,
+            companyId: compId,
+            period: e.period || getPeriodFromDate(e.date),
+            archived: e.archived || false
+          };
+        });
+        const mappedBks = bks.map(b => {
+          const compId = b.companyId || activeCompId;
+          return {
+            ...b,
+            companyId: compId,
+            period: b.period || getPeriodFromDate(b.date),
+            archived: b.archived || false
+          };
+        });
         
         setCollections(mappedCols);
         setExpenses(mappedExps);
@@ -536,7 +696,8 @@ export default function Home() {
     try {
       const newComp = await dbService.addCompany({
         name: companyNameInput.trim(),
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        currentPeriod: getCurrentMonthYear()
       });
       setCompanies(prev => [...prev, newComp]);
       setSelectedCompanyId(newComp.id);
@@ -632,7 +793,12 @@ export default function Home() {
   // --- COLLECTIONS CRUD CALLBACKS ---
   const handleAddCollection = async (payload) => {
     try {
-      const payloadWithCompany = { ...payload, companyId: selectedCompanyId };
+      const payloadWithCompany = { 
+        ...payload, 
+        companyId: selectedCompanyId,
+        period: getPeriodFromDate(payload.date),
+        archived: false
+      };
       const newItem = await dbService.addCollection(payloadWithCompany);
       setCollections(prev => [...prev, newItem]);
       addToast(`Collection "${payload.description}" added successfully!`);
@@ -643,7 +809,16 @@ export default function Home() {
 
   const handleUpdateCollection = async (id, payload) => {
     try {
-      const payloadWithCompany = { ...payload, companyId: selectedCompanyId };
+      const existing = collections.find(c => c.id === id);
+      const period = payload.date !== existing?.date 
+        ? getPeriodFromDate(payload.date) 
+        : (existing?.period || getPeriodFromDate(payload.date));
+      
+      const payloadWithCompany = { 
+        ...payload, 
+        companyId: selectedCompanyId,
+        period
+      };
       const updated = await dbService.updateCollection(id, payloadWithCompany);
       setCollections(prev => prev.map(item => item.id === id ? { ...item, ...updated } : item));
       addToast(`Collection "${payload.description}" updated successfully!`);
@@ -665,7 +840,12 @@ export default function Home() {
   // --- EXPENSES CRUD CALLBACKS ---
   const handleAddExpense = async (payload) => {
     try {
-      const payloadWithCompany = { ...payload, companyId: selectedCompanyId };
+      const payloadWithCompany = { 
+        ...payload, 
+        companyId: selectedCompanyId,
+        period: getPeriodFromDate(payload.date),
+        archived: false
+      };
       const newItem = await dbService.addExpense(payloadWithCompany);
       setExpenses(prev => [...prev, newItem]);
       addToast(`Expense "${payload.description}" logged successfully!`);
@@ -676,7 +856,16 @@ export default function Home() {
 
   const handleUpdateExpense = async (id, payload) => {
     try {
-      const payloadWithCompany = { ...payload, companyId: selectedCompanyId };
+      const existing = expenses.find(e => e.id === id);
+      const period = payload.date !== existing?.date 
+        ? getPeriodFromDate(payload.date) 
+        : (existing?.period || getPeriodFromDate(payload.date));
+
+      const payloadWithCompany = { 
+        ...payload, 
+        companyId: selectedCompanyId,
+        period
+      };
       const updated = await dbService.updateExpense(id, payloadWithCompany);
       setExpenses(prev => prev.map(item => item.id === id ? { ...item, ...updated } : item));
       addToast(`Expense "${payload.description}" updated successfully!`);
@@ -698,7 +887,11 @@ export default function Home() {
   // --- BOOKKEEPING CRUD CALLBACKS ---
   const handleAddBookkeeping = async (payload) => {
     try {
-      const payloadWithCompany = { ...payload, companyId: selectedCompanyId };
+      const payloadWithCompany = { 
+        ...payload, 
+        companyId: selectedCompanyId,
+        archived: false
+      };
       const newItem = await dbService.addBookkeeping(payloadWithCompany);
       setBookkeepings(prev => [...prev, newItem]);
       addToast("Bookkeeping service record saved successfully!");
@@ -725,6 +918,89 @@ export default function Home() {
       addToast("Bookkeeping record deleted.");
     } catch (err) {
       addToast("Failed to delete bookkeeping record.", "error");
+    }
+  };
+
+  const handleClosePeriod = async () => {
+    const activeComp = companies.find(c => c.id === selectedCompanyId);
+    if (!activeComp) return;
+
+    const currentPeriod = activeComp.currentPeriod || getCurrentMonthYear();
+    const nextPeriodVal = getNextPeriod(currentPeriod);
+
+    try {
+      // 1. Process Collections
+      const colsToProcess = collections.filter(
+        c => c.companyId === selectedCompanyId && c.period === currentPeriod
+      );
+      
+      const updatedCols = [];
+      for (const col of colsToProcess) {
+        const isReceived = col.status?.toLowerCase() === "received";
+        if (isReceived) {
+          const updated = await dbService.updateCollection(col.id, { archived: true });
+          updatedCols.push({ ...col, ...updated, archived: true });
+        } else {
+          const updated = await dbService.updateCollection(col.id, { period: nextPeriodVal });
+          updatedCols.push({ ...col, ...updated, period: nextPeriodVal });
+        }
+      }
+
+      setCollections(prev => prev.map(col => {
+        const match = updatedCols.find(x => x.id === col.id);
+        return match ? match : col;
+      }));
+
+      // 2. Process Expenses
+      const expsToProcess = expenses.filter(
+        e => e.companyId === selectedCompanyId && e.period === currentPeriod
+      );
+
+      const updatedExps = [];
+      for (const exp of expsToProcess) {
+        const isPaid = exp.status?.toLowerCase() === "paid";
+        if (isPaid) {
+          const updated = await dbService.updateExpense(exp.id, { archived: true });
+          updatedExps.push({ ...exp, ...updated, archived: true });
+        } else {
+          const updated = await dbService.updateExpense(exp.id, { period: nextPeriodVal });
+          updatedExps.push({ ...exp, ...updated, period: nextPeriodVal });
+        }
+      }
+
+      setExpenses(prev => prev.map(exp => {
+        const match = updatedExps.find(x => x.id === exp.id);
+        return match ? match : exp;
+      }));
+
+      // 3. Process Bookkeeping
+      const bksToProcess = bookkeepings.filter(
+        b => b.companyId === selectedCompanyId && b.period === currentPeriod
+      );
+
+      const updatedBks = [];
+      for (const bk of bksToProcess) {
+        const updated = await dbService.updateBookkeeping(bk.id, { archived: true });
+        updatedBks.push({ ...bk, ...updated, archived: true });
+      }
+
+      setBookkeepings(prev => prev.map(bk => {
+        const match = updatedBks.find(x => x.id === bk.id);
+        return match ? match : bk;
+      }));
+
+      // 4. Update active company period
+      const updatedComp = await dbService.updateCompany(selectedCompanyId, {
+        currentPeriod: nextPeriodVal
+      });
+      setCompanies(prev => prev.map(c => c.id === selectedCompanyId ? { ...c, ...updatedComp } : c));
+      
+      setViewingPeriod(nextPeriodVal);
+      setIsArchiveModalOpen(false);
+      addToast(`Period closed successfully! Settled records archived and outstanding items carried forward to ${nextPeriodVal}.`);
+    } catch (err) {
+      console.error("Error closing period:", err);
+      addToast("Failed to close period.", "error");
     }
   };
 
@@ -1051,6 +1327,39 @@ export default function Home() {
                   </AnimatePresence>
                 </div>
               </div>
+
+              {/* Financial Period Selector and Close/Archive trigger */}
+              <div className="sm:border-l sm:border-slate-200 sm:pl-4 flex flex-col items-start">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-450">Financial Period</span>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <div className="relative flex items-center">
+                    <select
+                      value={viewingPeriod}
+                      onChange={(e) => setViewingPeriod(e.target.value)}
+                      className="bg-transparent text-sm font-bold text-slate-800 border-none outline-none focus:ring-0 cursor-pointer hover:text-slate-600 transition-colors pr-6 py-0 pl-0 appearance-none"
+                    >
+                      {availablePeriods.map(p => (
+                        <option key={p} value={p}>
+                          {p} {p === activeCompany?.currentPeriod ? "(Active)" : "(Archived)"}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="absolute right-0 pointer-events-none text-slate-400">
+                      <ChevronDown size={14} />
+                    </span>
+                  </div>
+                  {viewingPeriod === activeCompany?.currentPeriod && (
+                    <button
+                      onClick={() => setIsArchiveModalOpen(true)}
+                      className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm"
+                      title="Archive settled entries & advance period"
+                    >
+                      <Archive size={11} />
+                      <span>Close Period</span>
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
 
             <div className="text-left sm:text-right">
@@ -1174,12 +1483,14 @@ export default function Home() {
                       onUpdate={handleUpdateCollection}
                       onDelete={handleDeleteCollection}
                       onAddReminder={handleAddReminder}
+                      isClosedPeriod={viewingPeriod !== activeCompany?.currentPeriod}
                     />
                     <FixedExpenses
                       items={activeExpenses}
                       onAdd={handleAddExpense}
                       onUpdate={handleUpdateExpense}
                       onDelete={handleDeleteExpense}
+                      isClosedPeriod={viewingPeriod !== activeCompany?.currentPeriod}
                     />
                   </div>
                 </motion.div>
@@ -1230,6 +1541,7 @@ export default function Home() {
                     onUpdate={handleUpdateBookkeeping}
                     onDelete={handleDeleteBookkeeping}
                     activeCompanyName={companies.find(c => c.id === selectedCompanyId)?.name || "Active Entity"}
+                    isClosedPeriod={viewingPeriod !== activeCompany?.currentPeriod}
                   />
                 </motion.div>
               )}
@@ -1482,6 +1794,102 @@ export default function Home() {
                   className="flex-1 py-2 text-xs bg-slate-900 text-white font-semibold rounded-lg hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
                 >
                   Save Business
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Period Close Modal */}
+      <AnimatePresence>
+        {isArchiveModalOpen && archivePreview && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-md bg-white border border-slate-100 rounded-xl overflow-hidden shadow-2xl p-6 space-y-4"
+            >
+              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                <h4 className="font-bold text-sm text-slate-800 flex items-center gap-1.5">
+                  <Archive size={16} className="text-slate-700" />
+                  <span>Close & Archive Period</span>
+                </h4>
+                <button
+                  onClick={() => setIsArchiveModalOpen(false)}
+                  className="text-slate-400 hover:text-slate-600 rounded-lg p-1 transition-colors cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Are you sure you want to close the financial period <strong className="text-slate-800">{archivePreview.currentPeriod}</strong> for this business? Fully settled ledger entries will be archived, and outstanding entries will be carried forward to <strong className="text-indigo-600">{archivePreview.nextPeriod}</strong>.
+                </p>
+
+                <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-3.5 space-y-2.5">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Archival Summary</span>
+                  
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-slate-500 font-medium">Ledger Inflows (Collections)</span>
+                    <div className="flex items-center gap-2">
+                      <span className="bg-emerald-100/70 text-emerald-800 px-2 py-0.5 rounded text-[10px] font-bold">
+                        {archivePreview.settledColsCount} Archived
+                      </span>
+                      {archivePreview.outstandingColsCount > 0 && (
+                        <span className="bg-amber-100/70 text-amber-800 px-2 py-0.5 rounded text-[10px] font-bold">
+                          {archivePreview.outstandingColsCount} Rolled Over
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-slate-500 font-medium">Ledger Outflows (Fixed Expenses)</span>
+                    <div className="flex items-center gap-2">
+                      <span className="bg-emerald-100/70 text-emerald-800 px-2 py-0.5 rounded text-[10px] font-bold">
+                        {archivePreview.settledExpsCount} Archived
+                      </span>
+                      {archivePreview.outstandingExpsCount > 0 && (
+                        <span className="bg-amber-100/70 text-amber-800 px-2 py-0.5 rounded text-[10px] font-bold">
+                          {archivePreview.outstandingExpsCount} Rolled Over
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-slate-500 font-medium">Bookkeeping Services</span>
+                    <span className="bg-emerald-100/70 text-emerald-800 px-2 py-0.5 rounded text-[10px] font-bold">
+                      {archivePreview.settledBksCount} Archived
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-xs text-indigo-750 flex items-start gap-2">
+                  <Calendar size={15} className="shrink-0 mt-0.5 text-indigo-600" />
+                  <p className="leading-relaxed text-indigo-800">
+                    The company&apos;s active period will advance to <strong>{archivePreview.nextPeriod}</strong>, and lists will switch to the new period. Past periods can be reviewed in read-only mode via the header.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsArchiveModalOpen(false)}
+                  className="flex-1 py-2 text-xs border border-slate-200 hover:bg-slate-50 text-slate-500 font-semibold rounded-lg transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleClosePeriod}
+                  className="flex-1 py-2 text-xs bg-slate-900 text-white font-semibold rounded-lg hover:bg-slate-800 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Archive size={13} />
+                  <span>Confirm Close Period</span>
                 </button>
               </div>
             </motion.div>
