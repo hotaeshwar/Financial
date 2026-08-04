@@ -935,21 +935,35 @@ export default function Home() {
       );
       
       const updatedCols = [];
+      const newCols = [];
       for (const col of colsToProcess) {
         const isReceived = col.status?.toLowerCase() === "received";
         if (isReceived) {
           const updated = await dbService.updateCollection(col.id, { archived: true });
           updatedCols.push({ ...col, ...updated, archived: true });
         } else {
-          const updated = await dbService.updateCollection(col.id, { period: nextPeriodVal });
-          updatedCols.push({ ...col, ...updated, period: nextPeriodVal });
+          // Archive in the current period
+          const updated = await dbService.updateCollection(col.id, { archived: true });
+          updatedCols.push({ ...col, ...updated, archived: true });
+          
+          // Clone to next period (preserving original dates and status)
+          const { id, ...clonedFields } = col;
+          const newItem = await dbService.addCollection({
+            ...clonedFields,
+            period: nextPeriodVal,
+            archived: false
+          });
+          newCols.push(newItem);
         }
       }
 
-      setCollections(prev => prev.map(col => {
-        const match = updatedCols.find(x => x.id === col.id);
-        return match ? match : col;
-      }));
+      setCollections(prev => {
+        const afterUpdates = prev.map(col => {
+          const match = updatedCols.find(x => x.id === col.id);
+          return match ? match : col;
+        });
+        return [...afterUpdates, ...newCols];
+      });
 
       // 2. Process Expenses
       const expsToProcess = expenses.filter(
@@ -957,21 +971,35 @@ export default function Home() {
       );
 
       const updatedExps = [];
+      const newExps = [];
       for (const exp of expsToProcess) {
         const isPaid = exp.status?.toLowerCase() === "paid";
         if (isPaid) {
           const updated = await dbService.updateExpense(exp.id, { archived: true });
           updatedExps.push({ ...exp, ...updated, archived: true });
         } else {
-          const updated = await dbService.updateExpense(exp.id, { period: nextPeriodVal });
-          updatedExps.push({ ...exp, ...updated, period: nextPeriodVal });
+          // Archive in the current period
+          const updated = await dbService.updateExpense(exp.id, { archived: true });
+          updatedExps.push({ ...exp, ...updated, archived: true });
+          
+          // Clone to next period (preserving original dates and status)
+          const { id, ...clonedFields } = exp;
+          const newItem = await dbService.addExpense({
+            ...clonedFields,
+            period: nextPeriodVal,
+            archived: false
+          });
+          newExps.push(newItem);
         }
       }
 
-      setExpenses(prev => prev.map(exp => {
-        const match = updatedExps.find(x => x.id === exp.id);
-        return match ? match : exp;
-      }));
+      setExpenses(prev => {
+        const afterUpdates = prev.map(exp => {
+          const match = updatedExps.find(x => x.id === exp.id);
+          return match ? match : exp;
+        });
+        return [...afterUpdates, ...newExps];
+      });
 
       // 3. Process Bookkeeping
       const bksToProcess = bookkeepings.filter(
