@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Edit3, Trash2, Search, X, Check, IndianRupee, Calendar, Tag, FileText, Bell, Lock } from "lucide-react";
+import { Plus, Edit3, Trash2, Search, X, Check, IndianRupee, Calendar, Tag, FileText, Bell } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import ReceiptModal from "./ReceiptModal";
 
@@ -178,7 +178,7 @@ export default function CollectionList({
   onUpdate, 
   onDelete,
   onAddReminder,
-  isClosedPeriod = false
+  readOnly
 }) {
   const [search, setSearch] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -365,12 +365,6 @@ export default function CollectionList({
             <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-medium">
               {filteredItems.length}
             </span>
-            {isClosedPeriod && (
-              <span className="text-[9px] bg-slate-100 text-slate-500 border border-slate-205 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1">
-                <Lock size={9} />
-                <span>Archived</span>
-              </span>
-            )}
           </h3>
           <p className="text-xs text-slate-400">Incoming receivables and payments</p>
         </div>
@@ -391,7 +385,7 @@ export default function CollectionList({
             <span>Export Excel</span>
           </button>
           
-          {!isClosedPeriod && (
+          {!readOnly && (
             <button
               type="button"
               onClick={handleOpenAdd}
@@ -489,30 +483,28 @@ export default function CollectionList({
                           </svg>
                         </button>
                         
-                        {!isClosedPeriod && item.status?.toLowerCase() !== "received" && (
-                          <button
-                            type="button"
-                            onClick={() => handleOpenReminderModal(item)}
-                            className="p-1 rounded text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
-                            title="Schedule Alert Reminder"
-                          >
-                            <Bell size={13} />
-                          </button>
-                        )}
-                        
-                        {!isClosedPeriod && (
+                        {!readOnly && (
                           <>
+                            {item.status?.toLowerCase() !== "received" && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenReminderModal(item)}
+                                className="p-1 rounded text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
+                                title="Schedule Alert Reminder"
+                              >
+                                <Bell size={13} />
+                              </button>
+                            )}
+                            
                             <button
                               onClick={() => handleOpenEdit(item)}
                               className="p-1 rounded text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-colors"
-                              title="Edit"
                             >
                               <Edit3 size={13} />
                             </button>
                             <button
                               onClick={() => handleDeleteClick(item)}
                               className="p-1 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                              title="Delete"
                             >
                               <Trash2 size={13} />
                             </button>

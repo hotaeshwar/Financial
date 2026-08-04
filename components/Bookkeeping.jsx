@@ -19,8 +19,7 @@ import {
   Info,
   TrendingUp,
   FileSpreadsheet,
-  FileDown,
-  Lock
+  FileDown
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { jsPDF } from "jspdf";
@@ -49,7 +48,7 @@ const CHART_COLORS = [
   "#06b6d4"  // Cyan
 ];
 
-export default function Bookkeeping({ items = [], onAdd, onUpdate, onDelete, activeCompanyName, isClosedPeriod = false }) {
+export default function Bookkeeping({ items = [], onAdd, onUpdate, onDelete, activeCompanyName }) {
   const [activeTab, setActiveTab] = useState("records"); // "records" or "analytics"
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -802,15 +801,7 @@ export default function Bookkeeping({ items = [], onAdd, onUpdate, onDelete, act
           <Building2 size={18} className="text-slate-300 shrink-0" />
           <div>
             <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Scope</span>
-            <p className="text-xs font-bold flex items-center gap-2">
-              Book Keeping Ledger for: <span className="underline decoration-emerald-400 decoration-2">{activeCompanyName}</span>
-              {isClosedPeriod && (
-                <span className="text-[9px] bg-slate-800 text-slate-300 border border-slate-750 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1">
-                  <Lock size={9} />
-                  <span>Archived</span>
-                </span>
-              )}
-            </p>
+            <p className="text-xs font-bold">Book Keeping Ledger for: <span className="underline decoration-emerald-400 decoration-2">{activeCompanyName}</span></p>
           </div>
         </div>
         <p className="text-[10px] text-slate-300 bg-slate-800 px-3 py-1 rounded-full border border-slate-700 font-medium">
@@ -908,15 +899,13 @@ export default function Bookkeeping({ items = [], onAdd, onUpdate, onDelete, act
                 <span>PDF Statement</span>
               </button>
 
-              {!isClosedPeriod && (
-                <button
-                  onClick={openAddForm}
-                  className="py-2 px-4 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer flex-1 md:flex-initial"
-                >
-                  <Plus size={14} />
-                  <span>Add Record</span>
-                </button>
-              )}
+              <button
+                onClick={openAddForm}
+                className="py-2 px-4 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer flex-1 md:flex-initial"
+              >
+                <Plus size={14} />
+                <span>Add Record</span>
+              </button>
             </div>
           </div>
 
@@ -988,24 +977,20 @@ export default function Bookkeeping({ items = [], onAdd, onUpdate, onDelete, act
                                 <Share2 size={13} />
                                 <span className="text-[10px] font-bold">Share</span>
                               </button>
-                              {!isClosedPeriod && (
-                                <>
-                                  <button
-                                    onClick={() => openEditForm(item)}
-                                    className="p-1.5 border border-slate-200 text-slate-500 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
-                                    title="Edit"
-                                  >
-                                    <Edit3 size={13} />
-                                  </button>
-                                  <button
-                                    onClick={() => handleDelete(item.id, descVal)}
-                                    className="p-1.5 border border-slate-200 text-red-500 hover:bg-red-50 hover:border-red-100 rounded-lg transition-colors cursor-pointer"
-                                    title="Delete"
-                                  >
-                                    <Trash2 size={13} />
-                                  </button>
-                                </>
-                              )}
+                              <button
+                                onClick={() => openEditForm(item)}
+                                className="p-1.5 border border-slate-200 text-slate-500 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
+                                title="Edit"
+                              >
+                                <Edit3 size={13} />
+                              </button>
+                              <button
+                                onClick={() => handleDelete(item.id, descVal)}
+                                className="p-1.5 border border-slate-200 text-red-500 hover:bg-red-50 hover:border-red-100 rounded-lg transition-colors cursor-pointer"
+                                title="Delete"
+                              >
+                                <Trash2 size={13} />
+                              </button>
                             </div>
                           </td>
                         </tr>
